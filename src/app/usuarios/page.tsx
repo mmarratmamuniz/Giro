@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/utils'
-import { Users, Shield, UserPlus, Trash2, CheckCircle2, X } from 'lucide-react'
+import { useAuth } from '@/contexts/auth-context'
+import { Users, Shield, UserPlus, Trash2, CheckCircle2, X, AlertTriangle } from 'lucide-react'
 
 export default function UsuariosPage() {
   const [profiles, setProfiles] = useState<any[]>([])
@@ -15,6 +16,11 @@ export default function UsuariosPage() {
   const [role, setRole] = useState<'admin' | 'operator'>('operator')
   const [submitting, setSubmitting] = useState(false)
 
+  // Modal de Exclusão
+  const [deletingUser, setDeletingUser] = useState<any | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  const { user: currentUser } = useAuth()
   const supabase = createClient()
 
   async function loadProfiles() {
@@ -65,12 +71,34 @@ export default function UsuariosPage() {
     }
   }
 
+  // Excluir Usuário (Controle Total do ADM)
+  const handleDeleteUser = async () => {
+    if (!deletingUser) return
+
+    try {
+      setDeleting(true)
+      const { error } = await supabase.rpc('delete_user_by_admin', {
+        p_user_id: deletingUser.id,
+      })
+
+      if (error) throw error
+
+      alert(`Usuário ${deletingUser.full_name || deletingUser.email} excluído com sucesso!`)
+      setDeletingUser(null)
+      loadProfiles()
+    } catch (err: any) {
+      alert(`Erro ao excluir usuário: ${err.message}`)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       <div className="flex items-center justify-between">
         <div>
           <h4 className="text-base font-bold text-white">Operadores e Administradores</h4>
-          <p className="text-xs text-slate-400">Gerenciamento de acessos do sistema</p>
+          <p className="text-xs text-slate-400">Controle total de acessos do sistema</p>
         </div>
 
         <button
@@ -91,28 +119,52 @@ export default function UsuariosPage() {
                 <th className="py-3.5 px-4">E-mail</th>
                 <th className="py-3.5 px-4">Perfil</th>
                 <th className="py-3.5 px-4">Data de Cadastro</th>
+                <th className="py-3.5 px-4 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-slate-200">
-              {profiles.map((p) => (
-                <tr key={p.id} className="hover:bg-slate-800/30 transition">
-                  <td className="py-3 px-4 font-bold text-white">{p.full_name || 'Usuário'}</td>
-                  <td className="py-3 px-4 text-slate-300">{p.email || '-'}</td>
-                  <td className="py-3 px-4">
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-                        p.role === 'admin'
-                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                          : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                      }`}
-                    >
-                      <Shield size={10} />
-                      {p.role === 'admin' ? 'Administrador' : 'Operador'}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-slate-400">{formatDate(p.created_at)}</td>
-                </tr>
-              ))}
+              {profiles.map((p) => {
+                const isMainAdmin = p.email === 'munizsheik08@gmail.com'
+                const isSelf = p.id === currentUser?.id
+
+                return (
+                  <tr key={p.id} className="hover:bg-slate-800/30 transition">
+                    <td className="py-3 px-4 font-bold text-white flex items-center gap-2">
+                      {p.full_name || 'Usuário'}
+                      {isMainAdmin && (
+                        <span className="rounded-md bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 text-[9px] font-extrabold text-amber-400">
+                          ADM GERAL
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-slate-300 font-mono">{p.email || '-'}</td>
+                    <td className="py-3 px-4">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                          p.role === 'admin'
+                            ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                            : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                        }`}
+                      >
+                        <Shield size={10} />
+                        {p.role === 'admin' ? 'Administrador' : 'Operador'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-slate-400">{formatDate(p.created_at)}</td>
+                    <td className="py-3 px-4 text-right">
+                      {!isMainAdmin && !isSelf && (
+                        <button
+                          onClick={() => setDeletingUser(p)}
+                          className="rounded-lg p-1.5 text-slate-500 hover:bg-rose-500/10 hover:text-rose-400 transition"
+                          title="Excluir Usuário"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -177,7 +229,7 @@ export default function UsuariosPage() {
                   onChange={(e) => setRole(e.target.value as any)}
                   className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none"
                 >
-                  <option value="operator">Operador (Acesso a PDV e Estoque)</option>
+                  <option value="operator">Operador (Acesso a PDV, Caixa e Estoque)</option>
                   <option value="admin">Administrador (Acesso Completo e Relatórios)</option>
                 </select>
               </div>
@@ -199,6 +251,42 @@ export default function UsuariosPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO */}
+      {deletingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="w-full max-w-md rounded-2xl border border-rose-500/30 bg-slate-900 p-6 shadow-2xl">
+            <div className="flex items-center gap-3 text-rose-400 pb-3 border-b border-slate-800">
+              <AlertTriangle size={22} />
+              <h3 className="text-base font-bold text-white">Excluir Usuário</h3>
+            </div>
+
+            <p className="text-xs text-slate-300 mt-4">
+              Tem certeza que deseja remover o usuário <strong>{deletingUser.full_name || deletingUser.email}</strong>?
+            </p>
+            <p className="text-[11px] text-slate-500 mt-1">
+              Esta ação revoga imediatamente o acesso e remove a conta do sistema.
+            </p>
+
+            <div className="flex justify-end gap-2 pt-6">
+              <button
+                type="button"
+                onClick={() => setDeletingUser(null)}
+                className="rounded-xl px-4 py-2 text-xs font-bold text-slate-400 hover:bg-slate-800"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeleteUser}
+                disabled={deleting}
+                className="rounded-xl bg-rose-500 px-5 py-2 text-xs font-extrabold text-white hover:bg-rose-600 transition"
+              >
+                {deleting ? 'Excluindo...' : 'Sim, Excluir Usuário'}
+              </button>
+            </div>
           </div>
         </div>
       )}
