@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
   ShoppingCart,
+  DollarSign,
   Package,
   Truck,
   History,
@@ -22,6 +23,7 @@ import { cn } from '@/lib/utils'
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/pdv', label: 'Frente de Caixa (PDV)', icon: ShoppingCart },
+  { href: '/caixa', label: 'Controle de Caixa', icon: DollarSign },
   { href: '/estoque', label: 'Estoque & Produtos', icon: Package },
   { href: '/compras', label: 'Entrada / Compras', icon: Truck },
   { href: '/historico', label: 'Histórico de Vendas', icon: History },

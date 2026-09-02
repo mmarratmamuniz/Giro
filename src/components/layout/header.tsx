@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/auth-context'
 const titles: Record<string, { title: string; subtitle: string }> = {
   '/': { title: 'Dashboard Principal', subtitle: 'Visão geral de desempenho financeiro e estoque' },
   '/pdv': { title: 'Frente de Caixa (PDV)', subtitle: 'Registro rápido e seguro de vendas' },
+  '/caixa': { title: 'Controle de Caixa', subtitle: 'Abertura, sangrias, suprimentos e conciliação de turno' },
   '/estoque': { title: 'Gestão de Estoque', subtitle: 'Cadastro de produtos, categorias e alertas' },
   '/compras': { title: 'Entrada de Mercadorias', subtitle: 'Registro de compras e fornecedores' },
   '/historico': { title: 'Histórico de Vendas', subtitle: 'Consultas, detalhes e comprovantes' },
