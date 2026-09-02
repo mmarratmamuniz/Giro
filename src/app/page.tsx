@@ -49,10 +49,11 @@ export default function DashboardPage() {
         const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString()
         const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString()
 
-        // 1. Vendas de Hoje
+        // 1. Vendas de Hoje (Apenas Concluídas)
         const { data: salesTodayData } = await supabase
           .from('sales')
-          .select('total_amount')
+          .select('id, total_amount, discount_amount')
+          .neq('status', 'CANCELED')
           .gte('date', startOfDay)
 
         const todayTotal = (salesTodayData || []).reduce(
@@ -60,10 +61,11 @@ export default function DashboardPage() {
           0
         )
 
-        // 2. Vendas do Mês
+        // 2. Vendas do Mês (Apenas Concluídas)
         const { data: salesMonthData } = await supabase
           .from('sales')
           .select('total_amount')
+          .neq('status', 'CANCELED')
           .gte('date', startOfMonth)
 
         const monthTotal = (salesMonthData || []).reduce(
@@ -92,23 +94,30 @@ export default function DashboardPage() {
           (p) => p.stock_quantity <= p.min_stock
         ).length
 
-        // 5. Lucro Estimado Real & Itens Vendidos
-        const { data: saleItemsData } = await supabase
-          .from('sale_items')
-          .select('quantity, unit_price, product_id, products(cost_price)')
+        // 5. Lucro Estimado Real & Itens Vendidos (Hoje)
+        // Lucro Real = Total Efetivamente Recebido - Custo Total dos Produtos Vendidos
+        const todaySaleIds = (salesTodayData || []).map((s) => s.id)
 
-        let profit = 0
+        let totalCostToday = 0
         let totalItemsSold = 0
 
-        if (saleItemsData) {
-          saleItemsData.forEach((item: any) => {
-            const qty = item.quantity || 0
-            const saleP = Number(item.unit_price) || 0
-            const costP = Number(item.products?.cost_price) || 0
-            profit += qty * (saleP - costP)
-            totalItemsSold += qty
-          })
+        if (todaySaleIds.length > 0) {
+          const { data: saleItemsData } = await supabase
+            .from('sale_items')
+            .select('quantity, unit_price, product_id, sale_id, products(cost_price)')
+            .in('sale_id', todaySaleIds)
+
+          if (saleItemsData) {
+            saleItemsData.forEach((item: any) => {
+              const qty = item.quantity || 0
+              const costP = Number(item.products?.cost_price) || 0
+              totalCostToday += qty * costP
+              totalItemsSold += qty
+            })
+          }
         }
+
+        const profit = todayTotal - totalCostToday
 
         setMetrics({
           todaySales: todayTotal,
@@ -127,6 +136,7 @@ export default function DashboardPage() {
         const { data: recentSales } = await supabase
           .from('sales')
           .select('date, total_amount')
+          .neq('status', 'CANCELED')
           .gte('date', sevenDaysAgo.toISOString())
           .order('date', { ascending: true })
 

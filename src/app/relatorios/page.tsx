@@ -42,10 +42,14 @@ export default function RelatoriosPage() {
       try {
         setLoading(true)
         const [salesRes, itemsRes] = await Promise.all([
-          supabase.from('sales').select('total_amount, payment_method'),
+          supabase
+            .from('sales')
+            .select('id, total_amount, payment_method')
+            .neq('status', 'CANCELED'),
           supabase
             .from('sale_items')
-            .select('quantity, unit_price, product_id, products(name, cost_price, category_id, categories(name))'),
+            .select('sale_id, quantity, unit_price, product_id, products(name, cost_price, category_id, categories(name)), sales!inner(status)')
+            .neq('sales.status', 'CANCELED'),
         ])
 
         // 1. Totais
