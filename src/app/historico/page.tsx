@@ -26,7 +26,7 @@ export default function HistoricoVendasPage() {
       setLoading(true)
       const { data, error } = await supabase
         .from('sales')
-        .select('*, sale_items(*, product:products(name, sku))')
+        .select('*, sale_items(*, products(name, sku))')
         .order('date', { ascending: false })
         .limit(100)
 
@@ -240,7 +240,7 @@ export default function HistoricoVendasPage() {
               date={selectedSale.date}
               paymentMethod={selectedSale.payment_method}
               items={selectedSale.sale_items?.map((it: any) => ({
-                product_name: it.product?.name || `Produto #${it.product_id}`,
+                product_name: it.products?.name || it.product?.name || `Produto #${it.product_id}`,
                 quantity: it.quantity,
                 unit_price: it.unit_price,
               })) || []}
