@@ -1,63 +1,36 @@
-# Mercado Gestão - Sistema Profissional de Gestão Comercial
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-Este projeto é um sistema de gestão robusto para conveniências e mercados, desenvolvido com foco em modularidade e escalabilidade.
+## Getting Started
 
-## 🏗️ Arquitetura do Projeto
+First, run the development server:
 
-O sistema utiliza uma **Arquitetura em Camadas (Layered Architecture)**, separando responsabilidades para facilitar a manutenção e evolução para um sistema de supermercado completo.
-
-### Estrutura de Pastas
-```text
-mercado-gestao/
-├── app/                    # Backend (Python + FastAPI)
-│   ├── api/                # Controladores (Rotas HTTP)
-│   ├── core/               # Configurações e Segurança
-│   ├── db/                 # Infraestrutura de Banco de Dados
-│   ├── models/             # Entidades do Banco (SQLAlchemy)
-│   ├── schemas/            # Validação de Dados (Pydantic)
-│   └── services/           # Lógica de Negócio (Service Layer)
-├── frontend/               # Interface (HTML/CSS/JS)
-├── data/                   # Banco de Dados SQLite
-└── tests/                  # Testes Automatizados
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
 ```
 
-## 📦 Explicação dos Módulos
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-### 1. Cadastro de Produtos
-Responsável por gerenciar o inventário. Inclui SKU, categoria, preços (custo e venda) e controle de estoque mínimo para alertas.
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-### 2. Registro de Compras
-Gerencia a entrada de mercadorias. Ao registrar uma compra, o sistema atualiza automaticamente o saldo do estoque e recalcula (opcionalmente) o preço de custo médio.
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-### 3. Registro de Vendas (PDV)
-Interface para saída de produtos. Realiza a baixa automática no estoque e registra a transação financeira.
+## Learn More
 
-### 4. Controle de Estoque
-Módulo central que monitora movimentações. Garante a integridade dos dados entre compras e vendas.
+To learn more about Next.js, take a look at the following resources:
 
-### 5. Dashboard & Relatórios
-Utiliza **Chart.js** para visualizar:
-*   Vendas totais por período.
-*   Produtos mais vendidos.
-*   Nível de estoque crítico.
-*   Fluxo de caixa (Entradas vs Saídas).
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-## 🔄 Fluxo do Sistema
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-1.  **Suprimento**: Compra de produtos -> Incremento de Estoque -> Registro de Saída Financeira.
-2.  **Operação**: Venda ao consumidor -> Decremento de Estoque -> Registro de Entrada Financeira.
-3.  **Análise**: Dados consolidados -> Dashboard em tempo real -> Relatórios para tomada de decisão.
+## Deploy on Vercel
 
-## ✨ Melhores Práticas Implementadas
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
-*   **Separação de Preocupações**: Backend e Frontend totalmente desacoplados via API REST.
-*   **DRY (Don't Repeat Yourself)**: Lógica centralizada na camada de `services`.
-*   **Segurança**: Validação rigorosa de tipos com Pydantic.
-*   **Performance**: Uso de FastAPI assíncrono para lidar com múltiplas requisições eficientemente.
-*   **Escalabilidade**: Modelagem preparada para migrar de SQLite para PostgreSQL no futuro sem mudar o código-fonte (graças ao SQLAlchemy).
-
----
-
-## 🚀 Organização Inicial do Backend
-
-O backend está estruturado para suportar injeção de dependência e roteamento modular. Cada recurso (ex: `products`) possui seu próprio conjunto de rotas, esquemas e serviços.
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

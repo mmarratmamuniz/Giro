@@ -1,0 +1,207 @@
+'use client'
+
+import React, { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { formatDate } from '@/lib/utils'
+import { Users, Shield, UserPlus, Trash2, CheckCircle2, X } from 'lucide-react'
+
+export default function UsuariosPage() {
+  const [profiles, setProfiles] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [role, setRole] = useState<'admin' | 'operator'>('operator')
+  const [submitting, setSubmitting] = useState(false)
+
+  const supabase = createClient()
+
+  async function loadProfiles() {
+    try {
+      setLoading(true)
+      const { data, error } = await supabase.from('profiles').select('*').order('created_at')
+      if (error) throw error
+      if (data) setProfiles(data)
+    } catch (err) {
+      console.error('Erro ao carregar usuários:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadProfiles()
+  }, [])
+
+  // Criar Usuário no Supabase Auth
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      setSubmitting(true)
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            role,
+          },
+        },
+      })
+
+      if (error) throw error
+
+      alert('Usuário cadastrado com sucesso!')
+      setIsModalOpen(false)
+      setEmail('')
+      setPassword('')
+      setFullName('')
+      loadProfiles()
+    } catch (err: any) {
+      alert(`Erro ao criar usuário: ${err.message}`)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-200">
+      <div className="flex items-center justify-between">
+        <div>
+          <h4 className="text-base font-bold text-white">Operadores e Administradores</h4>
+          <p className="text-xs text-slate-400">Gerenciamento de acessos do sistema</p>
+        </div>
+
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-xs font-extrabold text-slate-950 hover:bg-amber-400 shadow-md shadow-amber-500/20 transition"
+        >
+          <UserPlus size={16} /> Novo Usuário
+        </button>
+      </div>
+
+      {/* Tabela de Usuários */}
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-bold uppercase">
+              <tr>
+                <th className="py-3.5 px-4">Nome</th>
+                <th className="py-3.5 px-4">E-mail</th>
+                <th className="py-3.5 px-4">Perfil</th>
+                <th className="py-3.5 px-4">Data de Cadastro</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60 text-slate-200">
+              {profiles.map((p) => (
+                <tr key={p.id} className="hover:bg-slate-800/30 transition">
+                  <td className="py-3 px-4 font-bold text-white">{p.full_name || 'Usuário'}</td>
+                  <td className="py-3 px-4 text-slate-300">{p.email || '-'}</td>
+                  <td className="py-3 px-4">
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                        p.role === 'admin'
+                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                          : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                      }`}
+                    >
+                      <Shield size={10} />
+                      {p.role === 'admin' ? 'Administrador' : 'Operador'}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 text-slate-400">{formatDate(p.created_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* MODAL DE NOVO USUÁRIO */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <h3 className="text-base font-bold text-white">Criar Novo Acesso</h3>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateUser} className="mt-5 space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-400">Nome Completo</label>
+                <input
+                  type="text"
+                  required
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Ex: João da Silva"
+                  className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-400">E-mail de Acesso</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="operador@finishbebidas.com"
+                  className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-400">Senha Inicial</label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Mínimo 6 caracteres"
+                  className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-400">Nível de Permissão</label>
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as any)}
+                  className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none"
+                >
+                  <option value="operator">Operador (Acesso a PDV e Estoque)</option>
+                  <option value="admin">Administrador (Acesso Completo e Relatórios)</option>
+                </select>
+              </div>
+
+              <div className="pt-4 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="rounded-xl px-4 py-2 text-xs font-bold text-slate-400 hover:bg-slate-800"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="rounded-xl bg-amber-500 px-6 py-2 text-xs font-extrabold text-slate-950 hover:bg-amber-400 transition"
+                >
+                  {submitting ? 'Criando...' : 'Cadastrar Usuário'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
