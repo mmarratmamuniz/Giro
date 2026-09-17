@@ -32,19 +32,21 @@ const CartContext = createContext<CartContextType>({
 })
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>([])
-
-  // Carregar carrinho do localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem('finish_cart')
-    if (saved) {
-      try {
-        setItems(JSON.parse(saved))
-      } catch (_) {}
+  const [items, setItems] = useState<CartItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('finish_cart')
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch {
+          return []
+        }
+      }
     }
-  }, [])
+    return []
+  })
 
-  // Salvar alterações
+  // Salvar alterações no localStorage
   useEffect(() => {
     localStorage.setItem('finish_cart', JSON.stringify(items))
   }, [items])

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useAuth } from '@/contexts/auth-context'
 import { Database } from '@/types/database'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import {
@@ -36,6 +37,7 @@ export default function ComprasPage() {
   const [submitting, setSubmitting] = useState(false)
   const [activeTab, setActiveTab] = useState<'nova' | 'historico'>('nova')
 
+  const { user } = useAuth()
   const supabase = createClient()
 
   async function loadData() {
@@ -155,6 +157,7 @@ export default function ComprasPage() {
             quantity: item.quantity,
             origin: 'PURCHASE',
             note: `Entrada Compra #${purchaseId} - Fornecedor: ${supplier || 'N/A'}`,
+            user_id: user?.id || null,
           },
         ])
       }

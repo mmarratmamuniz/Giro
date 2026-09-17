@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Database } from '@/types/database'
 import { useCart } from '@/contexts/cart-context'
+import { useAuth } from '@/contexts/auth-context'
 import { formatCurrency } from '@/lib/utils'
 import { CashShift } from '@/types/cash'
 import { CashShiftModal } from '@/components/pdv/cash-shift-modal'
@@ -57,6 +58,7 @@ export default function PDVPage() {
 
   const searchInputRef = useRef<HTMLInputElement>(null)
   const { items, addItem, removeItem, updateQuantity, clearCart, totalAmount, totalItems } = useCart()
+  const { user } = useAuth()
   const supabase = createClient()
 
   // Buscar Caixa Aberto Atual
@@ -99,6 +101,17 @@ export default function PDVPage() {
     loadShift()
   }, [])
 
+  // Disparar abertura de pagamento (com validação de caixa)
+  const handleOpenPayment = () => {
+    if (items.length === 0) return
+    if (!currentShift) {
+      alert('ATENÇÃO: O caixa está FECHADO. Abra o turno de caixa antes de registrar vendas!')
+      setIsShiftModalOpen(true)
+      return
+    }
+    setIsPaymentModalOpen(true)
+  }
+
   // ATALHOS DE TECLADO: F2 (Nova Venda), F4 (Buscar), F8 (Cobrar), ESC (Fechar Modais)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -113,7 +126,7 @@ export default function PDVPage() {
       } else if (e.key === 'F8') {
         e.preventDefault()
         if (items.length > 0 && !isPaymentModalOpen && !saleSuccess) {
-          setIsPaymentModalOpen(true)
+          handleOpenPayment()
         }
       } else if (e.key === 'Escape') {
         if (isPaymentModalOpen) setIsPaymentModalOpen(false)
@@ -124,7 +137,7 @@ export default function PDVPage() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [items.length, isPaymentModalOpen, isShiftModalOpen, saleSuccess])
+  }, [items.length, isPaymentModalOpen, isShiftModalOpen, saleSuccess, currentShift])
 
   // Cálculo do Desconto
   const rawDiscount = parseFloat(discountInput) || 0
@@ -174,6 +187,7 @@ export default function PDVPage() {
       const { data, error } = await supabase.rpc('create_complete_sale', {
         p_payment_method: paymentMethod,
         p_items: payload,
+        p_user_id: user?.id || null,
         p_discount_amount: discountAmount,
         p_shift_id: currentShift?.id || null,
       })
@@ -480,7 +494,7 @@ export default function PDVPage() {
           </div>
 
           <button
-            onClick={() => setIsPaymentModalOpen(true)}
+            onClick={handleOpenPayment}
             disabled={items.length === 0}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 py-3 text-xs font-extrabold text-slate-950 shadow-lg shadow-amber-500/20 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition"
           >

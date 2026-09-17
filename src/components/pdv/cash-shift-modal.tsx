@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useAuth } from '@/contexts/auth-context'
 import { formatCurrency } from '@/lib/utils'
 import { CashShift } from '@/types/cash'
 import { DollarSign, ArrowDownRight, ArrowUpRight, Lock, Unlock, X } from 'lucide-react'
@@ -19,6 +20,7 @@ export function CashShiftModal({
   onClose,
   onSuccess,
 }: CashShiftModalProps) {
+  const { user } = useAuth()
   const [modalType, setModalType] = useState<'open' | 'close' | 'sangria' | 'suprimento'>(
     currentShift ? 'sangria' : 'open'
   )
@@ -39,6 +41,7 @@ export function CashShiftModal({
         .from('cash_shifts')
         .insert([
           {
+            user_id: user?.id || null,
             initial_amount: initial,
             status: 'OPEN',
             notes: reason || 'Abertura normal de turno',
@@ -73,6 +76,7 @@ export function CashShiftModal({
       const { error } = await supabase.from('cash_transactions').insert([
         {
           shift_id: currentShift.id,
+          user_id: user?.id || null,
           type,
           amount: val,
           reason: reason || (type === 'SANGRIA' ? 'Retirada de caixa' : 'Reforço de troco'),

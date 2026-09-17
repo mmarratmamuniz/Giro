@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useAuth } from '@/contexts/auth-context'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { ThermalReceipt } from '@/components/pdv/thermal-receipt'
 import { History, Eye, X, Receipt, Search, Filter, Ban, Printer, CheckCircle2 } from 'lucide-react'
@@ -19,6 +20,7 @@ export default function HistoricoVendasPage() {
   const [cancelReason, setCancelReason] = useState<string>('')
   const [canceling, setCanceling] = useState(false)
 
+  const { user } = useAuth()
   const supabase = createClient()
 
   async function loadSales() {
@@ -53,6 +55,7 @@ export default function HistoricoVendasPage() {
       const { error } = await supabase.rpc('cancel_sale', {
         p_sale_id: cancelingSale.id,
         p_reason: cancelReason || 'Cancelamento solicitado pelo operador/gerente',
+        p_user_id: user?.id || null,
       })
 
       if (error) throw error
