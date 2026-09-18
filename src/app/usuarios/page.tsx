@@ -107,10 +107,11 @@ export default function UsuariosPage() {
         </div>
 
         <button
-          onClick={() => setIsModalOpen(true)}
+          disabled
+          title="Cadastro disponível após implantação do convite seguro por empresa"
           className="flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-xs font-extrabold text-slate-950 hover:bg-amber-400 shadow-md shadow-amber-500/20 transition"
         >
-          <UserPlus size={16} /> Novo Usuário
+          <UserPlus size={16} /> Cadastro em preparação
         </button>
       </div>
 
@@ -159,9 +160,9 @@ export default function UsuariosPage() {
                     <td className="py-3 px-4 text-right">
                       {!isMainAdmin && !isSelf && (
                         <button
-                          onClick={() => setDeletingUser(p)}
+                          disabled
                           className="rounded-lg p-1.5 text-slate-500 hover:bg-rose-500/10 hover:text-rose-400 transition"
-                          title="Excluir Usuário"
+                          title="Exclusão disponível após validação de administrador e empresa no servidor"
                         >
                           <Trash2 size={15} />
                         </button>
