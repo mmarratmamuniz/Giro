@@ -28,6 +28,7 @@ import {
   Lock,
   Unlock,
   Keyboard,
+  ShoppingBag,
 } from 'lucide-react'
 import confetti from 'canvas-confetti'
 
@@ -40,6 +41,9 @@ export default function PDVPage() {
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null)
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
+
+  // Carrinho no Celular (Gaveta / Bottom sheet)
+  const [isMobileCartOpen, setIsMobileCartOpen] = useState(false)
 
   // Turno de Caixa
   const [currentShift, setCurrentShift] = useState<CashShift | null>(null)
@@ -228,9 +232,9 @@ export default function PDVPage() {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 h-[calc(100vh-8.5rem)] animate-in fade-in duration-200">
+    <div className="relative flex flex-col lg:grid lg:grid-cols-12 gap-5 min-h-[calc(100vh-6rem)] lg:h-[calc(100vh-8.5rem)] animate-in fade-in duration-200 pb-20 lg:pb-0">
       {/* Coluna Esquerda: Catálogo, Busca e Status de Caixa (8 colunas) */}
-      <div className="flex flex-col gap-3.5 lg:col-span-7 xl:col-span-8 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+      <div className="flex flex-col gap-3.5 lg:col-span-7 xl:col-span-8 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 p-3.5 sm:p-4">
         {/* Barra de Status do Caixa & Atalhos */}
         <div className="flex items-center justify-between bg-slate-950 px-3.5 py-2 rounded-xl border border-slate-800">
           <div className="flex items-center gap-2">
@@ -363,32 +367,52 @@ export default function PDVPage() {
         </div>
       </div>
 
-      {/* Coluna Direita: Carrinho, Descontos e Cobrança (4 colunas) */}
-      <div className="flex flex-col justify-between rounded-2xl border border-slate-800 bg-slate-900/60 p-4 lg:col-span-5 xl:col-span-4 overflow-hidden shadow-xl">
+      {/* Coluna Direita: Carrinho, Descontos e Cobrança */}
+      {/* Backdrop no Celular quando o carrinho estiver aberto */}
+      {isMobileCartOpen && (
+        <div
+          onClick={() => setIsMobileCartOpen(false)}
+          className="fixed inset-0 z-40 bg-slate-950/80 backdrop-blur-sm lg:hidden"
+        />
+      )}
+
+      <div
+        className={`fixed inset-x-0 bottom-0 z-50 rounded-t-3xl border-t border-slate-700 bg-slate-900 p-4 shadow-2xl transition-transform duration-300 lg:static lg:z-auto lg:flex lg:flex-col lg:justify-between lg:rounded-2xl lg:border lg:border-slate-800 lg:bg-slate-900/60 lg:shadow-xl lg:col-span-5 xl:col-span-4 lg:translate-y-0 ${
+          isMobileCartOpen ? 'translate-y-0 max-h-[85vh] overflow-y-auto' : 'translate-y-full lg:translate-y-0'
+        }`}
+      >
         <div>
           {/* Cabeçalho do Carrinho */}
           <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-            <div>
-              <h4 className="text-sm font-extrabold text-white">Pedido Atual</h4>
-              <p className="text-[11px] text-slate-400">{totalItems} item(ns)</p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsMobileCartOpen(false)}
+                className="lg:hidden rounded-lg p-1 text-slate-400 hover:bg-slate-800"
+              >
+                <X size={18} />
+              </button>
+              <div>
+                <h4 className="text-sm font-extrabold text-white">Pedido Atual</h4>
+                <p className="text-[11px] text-slate-400">{totalItems} item(ns)</p>
+              </div>
             </div>
             {items.length > 0 && (
               <button
                 onClick={clearCart}
                 className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-rose-400 hover:bg-rose-500/10 transition"
               >
-                <Trash2 size={12} /> Limpar [F2]
+                <Trash2 size={12} /> Limpar
               </button>
             )}
           </div>
 
           {/* Lista de Itens do Carrinho */}
-          <div className="h-[calc(100vh-27.5rem)] overflow-y-auto py-2.5 space-y-2 pr-1">
+          <div className="max-h-56 lg:h-[calc(100vh-27.5rem)] overflow-y-auto py-2.5 space-y-2 pr-1">
             {items.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center text-center p-6 text-slate-500">
+              <div className="flex h-36 lg:h-full flex-col items-center justify-center text-center p-4 text-slate-500">
                 <Receipt size={32} className="mb-2 text-slate-700" />
                 <p className="text-xs font-semibold text-slate-400">Carrinho Vazio</p>
-                <p className="text-[10px]">Bipe o código de barras ou selecione produtos.</p>
+                <p className="text-[10px]">Toque nos produtos para adicionar ao pedido.</p>
               </div>
             ) : (
               items.map((item) => (
@@ -501,6 +525,30 @@ export default function PDVPage() {
             <Sparkles size={16} /> Finalizar Venda [F8]
           </button>
         </div>
+      </div>
+
+      {/* Barra / Botão Flutuante de Carrinho no Celular */}
+      <div className="fixed inset-x-3 bottom-3 z-30 lg:hidden">
+        <button
+          onClick={() => setIsMobileCartOpen(true)}
+          className="flex w-full items-center justify-between rounded-2xl bg-amber-500 px-5 py-3.5 text-slate-950 shadow-2xl shadow-amber-500/30 font-bold active:scale-[0.98] transition"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="relative">
+              <ShoppingBag size={20} />
+              {totalItems > 0 && (
+                <span className="absolute -top-2 -right-2 flex h-4 w-4 items-center justify-center rounded-full bg-slate-950 text-[9px] font-black text-amber-400">
+                  {totalItems}
+                </span>
+              )}
+            </div>
+            <span className="text-xs uppercase tracking-wider">Ver Carrinho</span>
+          </div>
+
+          <span className="font-mono text-base font-black">
+            {formatCurrency(finalTotalToPay)}
+          </span>
+        </button>
       </div>
 
       {/* MODAL DE PAGAMENTO */}

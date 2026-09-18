@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/contexts/auth-context'
 import { CartProvider } from '@/contexts/cart-context'
+import { MobileMenuProvider } from '@/contexts/mobile-menu-context'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 
@@ -23,15 +24,17 @@ export default function RootLayout({
       <body className={`${inter.className} bg-slate-950 text-slate-100 antialiased min-h-screen selection:bg-amber-500 selection:text-slate-950`}>
         <AuthProvider>
           <CartProvider>
-            <div className="flex h-screen overflow-hidden">
-              <Sidebar />
-              <div className="flex flex-1 flex-col overflow-hidden">
-                <Header />
-                <main className="flex-1 overflow-y-auto bg-slate-950 p-6 lg:p-8">
-                  {children}
-                </main>
+            <MobileMenuProvider>
+              <div className="flex h-screen overflow-hidden">
+                <Sidebar />
+                <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+                  <Header />
+                  <main className="flex-1 overflow-y-auto bg-slate-950 p-3.5 sm:p-6 lg:p-8">
+                    {children}
+                  </main>
+                </div>
               </div>
-            </div>
+            </MobileMenuProvider>
           </CartProvider>
         </AuthProvider>
       </body>

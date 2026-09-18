@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
-import { Clock, Calendar, ShieldCheck, Bell } from 'lucide-react'
+import { Clock, Calendar, ShieldCheck, Bell, Menu } from 'lucide-react'
 import { useAuth } from '@/contexts/auth-context'
+import { useMobileMenu } from '@/contexts/mobile-menu-context'
 
 const titles: Record<string, { title: string; subtitle: string }> = {
   '/': { title: 'Dashboard Principal', subtitle: 'Visão geral de desempenho financeiro e estoque' },
@@ -19,6 +20,7 @@ const titles: Record<string, { title: string; subtitle: string }> = {
 export function Header() {
   const pathname = usePathname()
   const { profile } = useAuth()
+  const { toggleMobileMenu } = useMobileMenu()
   const [time, setTime] = useState('')
   const [date, setDate] = useState('')
 
@@ -54,28 +56,41 @@ export function Header() {
   }
 
   return (
-    <header className="flex h-20 items-center justify-between border-b border-slate-800 bg-slate-900/50 px-8 backdrop-blur-md sticky top-0 z-20">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight text-white">{info.title}</h1>
-        <p className="text-xs text-slate-400">{info.subtitle}</p>
+    <header className="flex h-16 sm:h-20 items-center justify-between border-b border-slate-800 bg-slate-900/50 px-4 sm:px-8 backdrop-blur-md sticky top-0 z-20">
+      <div className="flex items-center gap-3">
+        {/* Botão de Menu Hambúrguer (Mobile) */}
+        <button
+          onClick={toggleMobileMenu}
+          className="lg:hidden flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800/80 text-amber-400 hover:bg-slate-700 active:scale-95 transition"
+          aria-label="Abrir Menu Lateral"
+        >
+          <Menu size={22} />
+        </button>
+
+        <div className="overflow-hidden">
+          <h1 className="text-base sm:text-xl font-bold tracking-tight text-white truncate max-w-[200px] sm:max-w-none">
+            {info.title}
+          </h1>
+          <p className="text-[11px] sm:text-xs text-slate-400 hidden sm:block truncate">{info.subtitle}</p>
+        </div>
       </div>
 
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-3 sm:gap-6">
         {/* Relógio em Tempo Real */}
-        <div className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-2 text-slate-200 shadow-inner">
-          <Clock size={16} className="text-amber-400" />
-          <span className="font-mono text-sm font-semibold tracking-wider text-white">
+        <div className="flex items-center gap-2 sm:gap-3 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-1.5 sm:px-4 sm:py-2 text-slate-200 shadow-inner">
+          <Clock size={14} className="text-amber-400 shrink-0" />
+          <span className="font-mono text-xs sm:text-sm font-semibold tracking-wider text-white">
             {time || '00:00:00'}
           </span>
-          <span className="text-slate-700">|</span>
-          <Calendar size={14} className="text-slate-400" />
-          <span className="text-xs font-medium capitalize text-slate-400">{date}</span>
+          <span className="text-slate-700 hidden md:inline">|</span>
+          <Calendar size={14} className="text-slate-400 hidden md:inline" />
+          <span className="text-xs font-medium capitalize text-slate-400 hidden md:inline">{date}</span>
         </div>
 
         {/* Badge de Status */}
-        <div className="hidden sm:flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-400">
+        <div className="hidden md:flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 text-xs font-semibold text-emerald-400">
           <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-          Sistema Conectado
+          Conectado
         </div>
       </div>
     </header>
