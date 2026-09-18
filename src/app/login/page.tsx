@@ -30,11 +30,16 @@ export default function LoginPage() {
       if (data.user) {
         const { data: prof } = await supabase
           .from('profiles')
-          .select('role')
+          .select('role, tenant_id')
           .eq('id', data.user.id)
           .single()
 
-        if (prof?.role === 'operator') {
+        if (!prof?.tenant_id) {
+          await supabase.auth.signOut()
+          throw new Error('Conta sem vínculo com uma empresa. Solicite acesso ao administrador.')
+        }
+
+        if (prof.role === 'operator') {
           router.push('/pdv')
         } else {
           router.push('/')
