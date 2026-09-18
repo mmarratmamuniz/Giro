@@ -11,6 +11,7 @@ export interface Database {
     Tables: {
       categories: {
         Row: {
+          tenant_id: string
           id: number
           name: string
           description: string | null
@@ -31,6 +32,7 @@ export interface Database {
       }
       products: {
         Row: {
+          tenant_id: string
           id: number
           sku: string
           name: string
@@ -79,6 +81,7 @@ export interface Database {
       }
       purchases: {
         Row: {
+          tenant_id: string
           id: number
           date: string
           total_amount: number
@@ -102,6 +105,7 @@ export interface Database {
       }
       purchase_items: {
         Row: {
+          tenant_id: string
           id: number
           purchase_id: number
           product_id: number
@@ -125,6 +129,7 @@ export interface Database {
       }
       sales: {
         Row: {
+          tenant_id: string
           id: number
           date: string
           total_amount: number
@@ -151,6 +156,7 @@ export interface Database {
       }
       sale_items: {
         Row: {
+          tenant_id: string
           id: number
           sale_id: number
           product_id: number
@@ -175,6 +181,7 @@ export interface Database {
       }
       stock_movements: {
         Row: {
+          tenant_id: string
           id: number
           product_id: number
           movement_type: string
@@ -208,6 +215,7 @@ export interface Database {
       }
       profiles: {
         Row: {
+          tenant_id: string
           id: string
           email: string | null
           full_name: string | null
