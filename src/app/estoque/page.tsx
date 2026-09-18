@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useFeedback } from '@/contexts/feedback-context'
 import { Database } from '@/types/database'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import {
@@ -30,6 +31,8 @@ export default function EstoquePage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null)
+
+  const { showSuccess, showError } = useFeedback()
 
   // Modal de Produto (Novo / Edição)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -161,10 +164,14 @@ export default function EstoquePage() {
         if (error) throw error
       }
 
+      showSuccess(
+        editingProduct ? 'Produto Atualizado!' : 'Produto Cadastrado!',
+        `${formData.name} foi salvo no catálogo.`
+      )
       setIsModalOpen(false)
       loadData()
     } catch (err: any) {
-      alert(`Erro ao salvar produto: ${err.message}`)
+      showError('Erro ao salvar produto', err.message)
     }
   }
 
@@ -176,9 +183,13 @@ export default function EstoquePage() {
         .update({ is_active: !product.is_active })
         .eq('id', product.id)
       if (error) throw error
+      showSuccess(
+        'Status Atualizado',
+        `Produto ${product.name} agora está ${!product.is_active ? 'Ativo' : 'Inativo'}.`
+      )
       loadData()
     } catch (err: any) {
-      alert(`Erro ao atualizar status: ${err.message}`)
+      showError('Erro ao atualizar status', err.message)
     }
   }
 

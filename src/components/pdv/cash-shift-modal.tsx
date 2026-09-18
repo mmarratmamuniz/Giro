@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/contexts/auth-context'
+import { useFeedback } from '@/contexts/feedback-context'
 import { formatCurrency } from '@/lib/utils'
 import { CashShift } from '@/types/cash'
 import { DollarSign, ArrowDownRight, ArrowUpRight, Lock, Unlock, X } from 'lucide-react'
@@ -21,6 +22,7 @@ export function CashShiftModal({
   onSuccess,
 }: CashShiftModalProps) {
   const { user } = useAuth()
+  const { showSuccess, showError, showWarning, openDialog } = useFeedback()
   const [modalType, setModalType] = useState<'open' | 'close' | 'sangria' | 'suprimento'>(
     currentShift ? 'sangria' : 'open'
   )
@@ -51,11 +53,11 @@ export function CashShiftModal({
         .single()
 
       if (error) throw error
-      alert(`Caixa aberto com sucesso! Fundo de troco: ${formatCurrency(initial)}`)
+      showSuccess('Caixa Aberto!', `Turno liberado com fundo de troco de ${formatCurrency(initial)}`)
       onSuccess()
       onClose()
     } catch (err: any) {
-      alert(`Erro ao abrir caixa: ${err.message}`)
+      showError('Erro ao abrir caixa', err.message)
     } finally {
       setLoading(false)
     }
@@ -69,7 +71,7 @@ export function CashShiftModal({
     try {
       setLoading(true)
       const val = parseFloat(amount) || 0
-      if (val <= 0) return alert('Informe um valor válido.')
+      if (val <= 0) return showWarning('Valor Inválido', 'Informe um valor maior que zero.')
 
       const type = modalType === 'sangria' ? 'SANGRIA' : 'SUPRIMENTO'
 
@@ -84,11 +86,14 @@ export function CashShiftModal({
       ])
 
       if (error) throw error
-      alert(`${type === 'SANGRIA' ? 'Sangria' : 'Suprimento'} registrado com sucesso!`)
+      showSuccess(
+        `${type === 'SANGRIA' ? 'Sangria' : 'Suprimento'} Registrado!`,
+        `${formatCurrency(val)} movimentado com sucesso.`
+      )
       onSuccess()
       onClose()
     } catch (err: any) {
-      alert(`Erro na movimentação: ${err.message}`)
+      showError('Erro na movimentação', err.message)
     } finally {
       setLoading(false)
     }
@@ -144,16 +149,35 @@ export function CashShiftModal({
 
       if (error) throw error
 
-      alert(
-        `Caixa fechado com sucesso!\n\n` +
-        `Esperado no Sistema: ${formatCurrency(systemAmount)}\n` +
-        `Contado na Gaveta: ${formatCurrency(finalCounted)}\n` +
-        `Diferença: ${difference >= 0 ? '+' : ''}${formatCurrency(difference)}`
-      )
+      // Modal de Resumo Elegante no Padrão do Sistema
+      openDialog({
+        title: 'Caixa Fechado com Sucesso!',
+        type: difference < 0 ? 'warning' : 'success',
+        confirmText: 'Concluir Fechamento',
+        content: (
+          <div className="space-y-3 rounded-2xl bg-slate-950/80 border border-slate-800 p-4">
+            <div className="flex justify-between text-xs text-slate-300">
+              <span>Esperado no Sistema:</span>
+              <span className="font-mono font-bold text-white">{formatCurrency(systemAmount)}</span>
+            </div>
+            <div className="flex justify-between text-xs text-slate-300">
+              <span>Contado na Gaveta:</span>
+              <span className="font-mono font-bold text-white">{formatCurrency(finalCounted)}</span>
+            </div>
+            <div className="flex justify-between text-xs pt-2 border-t border-slate-800 font-bold">
+              <span>Diferença ({difference >= 0 ? 'Sobra / Bateu' : 'Falta'}):</span>
+              <span className={`font-mono ${difference >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {difference >= 0 ? '+' : ''}{formatCurrency(difference)}
+              </span>
+            </div>
+          </div>
+        ),
+      })
+
       onSuccess()
       onClose()
     } catch (err: any) {
-      alert(`Erro ao fechar caixa: ${err.message}`)
+      showError('Erro ao fechar caixa', err.message)
     } finally {
       setLoading(false)
     }

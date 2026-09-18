@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Database } from '@/types/database'
 import { useCart } from '@/contexts/cart-context'
 import { useAuth } from '@/contexts/auth-context'
+import { useFeedback } from '@/contexts/feedback-context'
 import { formatCurrency } from '@/lib/utils'
 import { CashShift } from '@/types/cash'
 import { CashShiftModal } from '@/components/pdv/cash-shift-modal'
@@ -63,6 +64,7 @@ export default function PDVPage() {
   const searchInputRef = useRef<HTMLInputElement>(null)
   const { items, addItem, removeItem, updateQuantity, clearCart, totalAmount, totalItems } = useCart()
   const { user } = useAuth()
+  const { showError, openDialog } = useFeedback()
   const supabase = createClient()
 
   // Buscar Caixa Aberto Atual
@@ -109,8 +111,13 @@ export default function PDVPage() {
   const handleOpenPayment = () => {
     if (items.length === 0) return
     if (!currentShift) {
-      alert('ATENÇÃO: O caixa está FECHADO. Abra o turno de caixa antes de registrar vendas!')
-      setIsShiftModalOpen(true)
+      openDialog({
+        title: 'Caixa Fechado',
+        message: 'O turno de caixa atual está fechado. Abra o caixa informando o fundo de troco antes de registrar vendas.',
+        type: 'warning',
+        confirmText: 'Abrir Caixa Agora',
+        onConfirm: () => setIsShiftModalOpen(true),
+      })
       return
     }
     setIsPaymentModalOpen(true)
@@ -225,7 +232,7 @@ export default function PDVPage() {
       setCashGiven('')
       setIsPaymentModalOpen(false)
     } catch (err: any) {
-      alert(`Erro ao finalizar venda: ${err.message || 'Verifique o estoque dos produtos.'}`)
+      showError('Erro ao finalizar venda', err.message || 'Verifique o estoque dos produtos.')
     } finally {
       setSubmitting(false)
     }

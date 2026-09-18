@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/contexts/auth-context'
+import { useFeedback } from '@/contexts/feedback-context'
 import { Database } from '@/types/database'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import {
@@ -38,6 +39,7 @@ export default function ComprasPage() {
   const [activeTab, setActiveTab] = useState<'nova' | 'historico'>('nova')
 
   const { user } = useAuth()
+  const { showSuccess, showError } = useFeedback()
   const supabase = createClient()
 
   async function loadData() {
@@ -162,13 +164,16 @@ export default function ComprasPage() {
         ])
       }
 
-      alert('Compra registrada e estoque atualizado com sucesso!')
+      showSuccess(
+        'Compra Registrada!',
+        `Estoque atualizado para os produtos e entrada #${purchaseId} salva com sucesso.`
+      )
       setItems([])
       setSupplier('')
       setActiveTab('historico')
       loadData()
     } catch (err: any) {
-      alert(`Erro ao registrar compra: ${err.message}`)
+      showError('Erro ao registrar compra', err.message)
     } finally {
       setSubmitting(false)
     }

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatDate } from '@/lib/utils'
 import { useAuth } from '@/contexts/auth-context'
+import { useFeedback } from '@/contexts/feedback-context'
 import { Users, Shield, UserPlus, Trash2, CheckCircle2, X, AlertTriangle } from 'lucide-react'
 
 export default function UsuariosPage() {
@@ -21,6 +22,7 @@ export default function UsuariosPage() {
   const [deleting, setDeleting] = useState(false)
 
   const { user: currentUser } = useAuth()
+  const { showSuccess, showError } = useFeedback()
   const supabase = createClient()
 
   async function loadProfiles() {
@@ -58,14 +60,14 @@ export default function UsuariosPage() {
 
       if (error) throw error
 
-      alert('Usuário cadastrado com sucesso!')
+      showSuccess('Usuário Cadastrado!', `${fullName || email} foi cadastrado com sucesso.`)
       setIsModalOpen(false)
       setEmail('')
       setPassword('')
       setFullName('')
       loadProfiles()
     } catch (err: any) {
-      alert(`Erro ao criar usuário: ${err.message}`)
+      showError('Erro ao criar usuário', err.message)
     } finally {
       setSubmitting(false)
     }
@@ -83,11 +85,14 @@ export default function UsuariosPage() {
 
       if (error) throw error
 
-      alert(`Usuário ${deletingUser.full_name || deletingUser.email} excluído com sucesso!`)
+      showSuccess(
+        'Usuário Excluído!',
+        `${deletingUser.full_name || deletingUser.email} foi removido do sistema.`
+      )
       setDeletingUser(null)
       loadProfiles()
     } catch (err: any) {
-      alert(`Erro ao excluir usuário: ${err.message}`)
+      showError('Erro ao excluir usuário', err.message)
     } finally {
       setDeleting(false)
     }

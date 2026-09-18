@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/contexts/auth-context'
+import { useFeedback } from '@/contexts/feedback-context'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { ThermalReceipt } from '@/components/pdv/thermal-receipt'
 import { History, Eye, X, Receipt, Search, Filter, Ban, Printer, CheckCircle2 } from 'lucide-react'
@@ -21,6 +22,7 @@ export default function HistoricoVendasPage() {
   const [canceling, setCanceling] = useState(false)
 
   const { user } = useAuth()
+  const { showSuccess, showError } = useFeedback()
   const supabase = createClient()
 
   async function loadSales() {
@@ -60,12 +62,15 @@ export default function HistoricoVendasPage() {
 
       if (error) throw error
 
-      alert(`Venda #${cancelingSale.id} estornada e itens devolvidos ao estoque com sucesso!`)
+      showSuccess(
+        'Venda Estornada!',
+        `Cupom #${cancelingSale.id} cancelado e itens devolvidos ao estoque com sucesso.`
+      )
       setCancelingSale(null)
       setCancelReason('')
       loadSales()
     } catch (err: any) {
-      alert(`Erro ao cancelar venda: ${err.message}`)
+      showError('Erro ao cancelar venda', err.message)
     } finally {
       setCanceling(false)
     }
