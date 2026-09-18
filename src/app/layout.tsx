@@ -12,8 +12,8 @@ import { Header } from '@/components/layout/header'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Finish Bebidas | Gestão Comercial',
-  description: 'Sistema de Gestão Profissional para Conveniências e Mercados',
+  title: 'Giro | Gestão Comercial',
+  description: 'Sistema de Gestão Profissional e Controle de Vendas',
 }
 
 export default function RootLayout({

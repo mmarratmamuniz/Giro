@@ -34,7 +34,7 @@ const CartContext = createContext<CartContextType>({
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('finish_cart')
+      const saved = localStorage.getItem('giro_cart') || localStorage.getItem('finish_cart')
       if (saved) {
         try {
           return JSON.parse(saved)
@@ -48,7 +48,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   // Salvar alterações no localStorage
   useEffect(() => {
-    localStorage.setItem('finish_cart', JSON.stringify(items))
+    localStorage.setItem('giro_cart', JSON.stringify(items))
   }, [items])
 
   const addItem = (product: Product, quantity: number = 1) => {
@@ -83,6 +83,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const clearCart = () => {
     setItems([])
+    localStorage.removeItem('giro_cart')
     localStorage.removeItem('finish_cart')
   }
 

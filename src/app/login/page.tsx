@@ -65,7 +65,7 @@ export default function LoginPage() {
             <Store size={30} className="text-slate-950" />
           </div>
           <h2 className="text-2xl font-extrabold text-white tracking-tight">
-            FINISH <span className="text-amber-400">BEBIDAS</span>
+            GIRO <span className="text-amber-400">SISTEMA</span>
           </h2>
           <p className="text-xs text-slate-400 mt-1">Acesso ao Sistema de Gestão Comercial</p>
         </div>
@@ -86,7 +86,7 @@ export default function LoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="seu-email@finishbebidas.com"
+                placeholder="seu-email@giro.com"
                 className="w-full rounded-xl border border-slate-800 bg-slate-950 py-2.5 pl-10 pr-4 text-xs text-white placeholder-slate-500 focus:border-amber-500 focus:outline-none"
               />
             </div>

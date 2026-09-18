@@ -47,8 +47,8 @@ export function ThermalReceipt({
       <div id="thermal-receipt" className="w-[300px] bg-white text-black p-4 font-mono text-xs shadow-2xl rounded-sm print:m-0 print:p-2 print:w-full print:shadow-none">
         {/* Cabeçalho */}
         <div className="text-center border-b border-dashed border-black pb-3 mb-2">
-          <h2 className="text-sm font-black tracking-tighter uppercase">FINISH BEBIDAS</h2>
-          <p className="text-[10px]">Conveniência e Distribuidora</p>
+          <h2 className="text-sm font-black tracking-tighter uppercase">GIRO SISTEMA</h2>
+          <p className="text-[10px]">Gestão Comercial e Controle de Vendas</p>
           <p className="text-[10px]">CUPOM NÃO FISCAL</p>
           <div className="mt-2 text-[10px] flex justify-between">
             <span>VENDA: #{saleId}</span>
@@ -112,7 +112,7 @@ export function ThermalReceipt({
         {/* Rodapé */}
         <div className="text-center text-[10px] pt-2 space-y-1">
           <p className="font-bold">OBRIGADO PELA PREFERÊNCIA!</p>
-          <p className="text-[8px] text-neutral-600">Volte Sempre • Finish Bebidas</p>
+          <p className="text-[8px] text-neutral-600">Volte Sempre • Giro</p>
         </div>
       </div>
 

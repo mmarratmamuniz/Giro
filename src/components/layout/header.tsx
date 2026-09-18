@@ -51,7 +51,7 @@ export function Header() {
   if (pathname === '/login') return null
 
   const info = titles[pathname] || {
-    title: 'Finish Bebidas',
+    title: 'Giro',
     subtitle: 'Sistema Profissional de Gestão',
   }
 

@@ -83,7 +83,7 @@ export function Sidebar() {
             {(!collapsed || isMobileOpen) && (
               <div className="flex flex-col overflow-hidden">
                 <span className="font-extrabold tracking-tight text-lg text-white">
-                  FINISH <span className="text-amber-400">BEBIDAS</span>
+                  GIRO <span className="text-amber-400">SISTEMA</span>
                 </span>
                 <span className="text-[10px] font-medium tracking-wider text-slate-400 uppercase">
                   Gestão Comercial

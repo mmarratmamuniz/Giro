@@ -210,7 +210,7 @@ export default function UsuariosPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="operador@finishbebidas.com"
+                  placeholder="operador@giro.com"
                   className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none"
                 />
               </div>
