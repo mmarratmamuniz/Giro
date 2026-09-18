@@ -5,8 +5,8 @@ export async function createServerSupabaseClient() {
   const cookieStore = await cookies()
 
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://sttykwmygbjeswigkvnn.supabase.co',
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'dummy_key',
+    process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://aqtbmfgixlggbuwtorld.supabase.co',
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFxdGJtZmdpeGxnZ2J1d3RvcmxkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk3NjA0ODUsImV4cCI6MjEwNTMzNjQ4NX0.akgCQbOBm2asMjuLsEzFRBGV-0Yz0YMzAoaevJF_5GM',
     {
       cookies: {
         getAll() {
