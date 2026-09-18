@@ -6,6 +6,7 @@ import { User } from '@supabase/supabase-js'
 
 interface Profile {
   id: string
+  tenant_id: string
   email: string | null
   full_name: string | null
   role: string
@@ -44,12 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .eq('id', session.user.id)
             .single()
 
-          setProfile(prof || {
-            id: session.user.id,
-            email: session.user.email ?? '',
-            full_name: session.user.email?.split('@')[0] ?? 'Operador',
-            role: 'admin'
-          })
+          setProfile(prof || null)
         }
       } catch (err) {
         console.error('Erro ao carregar usuário:', err)
