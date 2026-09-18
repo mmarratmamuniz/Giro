@@ -104,6 +104,12 @@ export function Sidebar() {
         {/* Navegação de Menus */}
         <nav className="flex-1 space-y-1.5 p-3 overflow-y-auto">
           {navItems.map((item) => {
+            // Se for operador de caixa, só vê a Frente de Caixa (PDV)
+            if (profile?.role === 'operator' && item.href !== '/pdv') {
+              return null
+            }
+
+            // Itens exclusivos de admin
             if (item.adminOnly && !isAdmin) return null
 
             const Icon = item.icon

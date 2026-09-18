@@ -26,7 +26,23 @@ export default function LoginPage() {
 
       if (error) throw error
 
-      router.push('/')
+      // Verificar se é operador ou admin para direcionar para a página correta
+      if (data.user) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', data.user.id)
+          .single()
+
+        if (prof?.role === 'operator') {
+          router.push('/pdv')
+        } else {
+          router.push('/')
+        }
+      } else {
+        router.push('/')
+      }
+
       router.refresh()
     } catch (err: any) {
       setErrorMsg(err.message || 'Falha na autenticação. Verifique seu e-mail e senha.')
