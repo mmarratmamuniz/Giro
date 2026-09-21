@@ -15,7 +15,7 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
     // Se estiver na tela de login, não bloqueia
     if (pathname === '/login') return
 
-    if (!user || !profile?.tenant_id) {
+    if (!user || (profile && 'tenant_id' in profile && profile.tenant_id === null)) {
       router.replace('/login')
       return
     }
@@ -28,7 +28,7 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
     }
   }, [user, profile, loading, pathname, router])
 
-  if (!loading && pathname !== '/login' && (!user || !profile?.tenant_id)) {
+  if (!loading && pathname !== '/login' && (!user || (profile && 'tenant_id' in profile && profile.tenant_id === null))) {
     return <div className="flex h-64 items-center justify-center text-xs text-slate-500">Redirecionando para o login...</div>
   }
 
