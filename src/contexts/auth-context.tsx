@@ -6,10 +6,13 @@ import { User } from '@supabase/supabase-js'
 
 interface Profile {
   id: string
-  tenant_id: string
+  tenant_id?: string | null
+  network_id?: string | null
+  unit_id?: string | null
+  branch_id?: string | null
   email: string | null
   full_name: string | null
-  role: string
+  role: 'super_admin' | 'network_admin' | 'unit_admin' | 'branch_admin' | 'cashier_operator' | 'admin' | 'operator'
 }
 
 interface AuthContextType {

@@ -14,6 +14,7 @@ import {
   Users,
   LogOut,
   Store,
+  Network,
   ChevronLeft,
   ChevronRight,
   X,
@@ -31,6 +32,7 @@ const navItems = [
   { href: '/historico', label: 'Histórico de Vendas', icon: History },
   { href: '/relatorios', label: 'Relatórios & CMV', icon: FileBarChart, adminOnly: true },
   { href: '/usuarios', label: 'Usuários', icon: Users, adminOnly: true },
+  { href: '/redes', label: 'Redes & Filiais', icon: Network, adminOnly: true },
 ]
 
 export function Sidebar() {
