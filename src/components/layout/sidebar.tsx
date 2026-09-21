@@ -44,7 +44,12 @@ export function Sidebar() {
   // Ocultar sidebar na tela de login
   if (pathname === '/login') return null
 
-  const isAdmin = profile?.role === 'admin'
+  const isAdmin =
+    profile?.role === 'super_admin' ||
+    profile?.role === 'network_admin' ||
+    profile?.role === 'unit_admin' ||
+    profile?.role === 'branch_admin' ||
+    profile?.role === 'admin'
 
   return (
     <>
@@ -154,7 +159,17 @@ export function Sidebar() {
                   {profile?.full_name || 'Operador'}
                 </span>
                 <span className="text-[10px] font-medium text-amber-400 capitalize">
-                  {profile?.role === 'admin' ? 'Administrador' : 'Operador'}
+                  {profile?.role === 'super_admin'
+                    ? 'Super Admin'
+                    : profile?.role === 'network_admin'
+                    ? 'Admin Rede'
+                    : profile?.role === 'unit_admin'
+                    ? 'Admin Unidade'
+                    : profile?.role === 'branch_admin'
+                    ? 'Admin Filial'
+                    : profile?.role === 'admin'
+                    ? 'Administrador'
+                    : 'Operador'}
                 </span>
               </div>
             )}
