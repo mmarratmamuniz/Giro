@@ -11,16 +11,13 @@ import {
   Store,
   Computer,
   Plus,
-  Trash2,
-  ChevronRight,
   ShieldCheck,
-  CheckCircle2,
   Layers,
 } from 'lucide-react'
 
 export default function RedesPage() {
   const { profile } = useAuth()
-  const { networks, units, branches, reloadStructure, loadingStructure } = useNetwork()
+  const { networks, units, branches, reloadStructure } = useNetwork()
   const { showSuccess, showError } = useFeedback()
   const supabase = createClient()
 
@@ -51,15 +48,82 @@ export default function RedesPage() {
   const [cashDesks, setCashDesks] = useState<any[]>([])
 
   const isSuperAdmin = profile?.role === 'super_admin'
+  const isNetworkAdmin = profile?.role === 'network_admin'
+
+  const displayNetworks = isSuperAdmin
+    ? networks
+    : networks.filter((n) => n.id === profile?.network_id)
+
+  const displayUnits = isSuperAdmin
+    ? units
+    : units.filter((u) => displayNetworks.some((n) => n.id === u.network_id))
+
+  const displayBranches = isSuperAdmin
+    ? branches
+    : branches.filter((b) => displayUnits.some((u) => u.id === b.unit_id))
 
   async function loadCashDesks() {
-    const { data } = await supabase.from('cash_desks').select('*').order('name')
+    if (!profile) return
+    const branchIds = displayBranches.map((b) => b.id)
+    if (branchIds.length === 0) {
+      setCashDesks([])
+      return
+    }
+    const { data } = await supabase
+      .from('cash_desks')
+      .select('*')
+      .in('branch_id', branchIds)
+      .order('name')
     if (data) setCashDesks(data)
   }
 
   useEffect(() => {
-    loadCashDesks()
-  }, [branches])
+    if (profile) {
+      loadCashDesks()
+    }
+  }, [profile, branches, units, networks])
+
+  const openModal = (type: 'network' | 'unit' | 'branch' | 'cash_desk' | null) => {
+    if (type === 'network') {
+      setNetworkName('')
+      setNetworkCnpj('')
+    } else if (type === 'unit') {
+      const defaultNet = displayNetworks[0]?.id || ''
+      setUnitNetworkId(defaultNet)
+      setUnitName('')
+      setUnitCity('')
+      setUnitState('')
+    } else if (type === 'branch') {
+      const defaultNet = displayNetworks[0]?.id || ''
+      const availableUnits = displayUnits.filter((u) => !defaultNet || u.network_id === defaultNet)
+      setBranchNetworkId(defaultNet)
+      setBranchUnitId(availableUnits[0]?.id || '')
+      setBranchName('')
+      setBranchAddress('')
+      setBranchPhone('')
+    } else if (type === 'cash_desk') {
+      const defaultBranch = displayBranches[0]?.id || ''
+      setCashDeskBranchId(defaultBranch)
+      setCashDeskName('')
+      setCashDeskCode('')
+    }
+    setModalType(type)
+  }
+
+  // Se o usuário não for super_admin nem network_admin, bloqueia a visão
+  if (profile && !isSuperAdmin && !isNetworkAdmin) {
+    return (
+      <div className="flex h-96 flex-col items-center justify-center text-center p-6">
+        <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-rose-400 mb-3">
+          <ShieldCheck size={28} />
+        </div>
+        <h3 className="text-base font-bold text-white">Acesso Restrito às Redes</h3>
+        <p className="text-xs text-slate-400 max-w-sm mt-1">
+          Apenas Administradores de Rede e Super Administradores possuem permissão para configurar a estrutura de redes e filiais.
+        </p>
+      </div>
+    )
+  }
 
   // Submissão: Criar Rede
   const handleCreateNetwork = async (e: React.FormEvent) => {
@@ -89,11 +153,12 @@ export default function RedesPage() {
     e.preventDefault()
     try {
       setSubmitting(true)
-      const targetNet = unitNetworkId || networks[0]?.id
-      if (!targetNet) throw new Error('Selecione uma rede.')
+      if (!unitNetworkId) {
+        throw new Error('Selecione uma rede válida.')
+      }
 
       const { error } = await supabase.from('units').insert({
-        network_id: targetNet,
+        network_id: unitNetworkId,
         name: unitName.trim(),
         city: unitCity.trim() || null,
         state: unitState.trim() || null,
@@ -118,15 +183,18 @@ export default function RedesPage() {
     e.preventDefault()
     try {
       setSubmitting(true)
-      const targetUnit = branchUnitId || units[0]?.id
-      const unitObj = units.find((u) => u.id === targetUnit)
-      const targetNet = unitObj?.network_id || branchNetworkId || networks[0]?.id
-
-      if (!targetUnit || !targetNet) throw new Error('Selecione a unidade e a rede.')
+      if (!branchUnitId) {
+        throw new Error('Selecione uma unidade/polo válida.')
+      }
+      const unitObj = units.find((u) => u.id === branchUnitId)
+      const targetNet = unitObj?.network_id || branchNetworkId
+      if (!targetNet) {
+        throw new Error('Selecione uma rede válida vinculada à unidade.')
+      }
 
       const { data: branchData, error } = await supabase.from('branches').insert({
         network_id: targetNet,
-        unit_id: targetUnit,
+        unit_id: branchUnitId,
         name: branchName.trim(),
         address: branchAddress.trim() || null,
         phone: branchPhone.trim() || null,
@@ -136,12 +204,13 @@ export default function RedesPage() {
 
       // Criar automaticamente o primeiro caixa padrão ("Caixa 01") para a nova filial
       if (branchData) {
-        await supabase.from('cash_desks').insert({
+        const { error: deskErr } = await supabase.from('cash_desks').insert({
           branch_id: branchData.id,
           name: 'Caixa 01',
           code: 'CX-01',
           is_active: true,
         })
+        if (deskErr) throw deskErr
       }
 
       showSuccess('Filial Criada!', `A filial "${branchName}" foi cadastrada com o Caixa 01 inicial.`)
@@ -163,11 +232,12 @@ export default function RedesPage() {
     e.preventDefault()
     try {
       setSubmitting(true)
-      const targetBranch = cashDeskBranchId || branches[0]?.id
-      if (!targetBranch) throw new Error('Selecione uma filial.')
+      if (!cashDeskBranchId) {
+        throw new Error('Selecione uma filial válida.')
+      }
 
       const { error } = await supabase.from('cash_desks').insert({
-        branch_id: targetBranch,
+        branch_id: cashDeskBranchId,
         name: cashDeskName.trim(),
         code: cashDeskCode.trim() || null,
         is_active: true,
@@ -208,29 +278,29 @@ export default function RedesPage() {
         <div className="flex flex-wrap items-center gap-2">
           {isSuperAdmin && (
             <button
-              onClick={() => setModalType('network')}
+              onClick={() => openModal('network')}
               className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-3.5 py-2.5 text-xs font-bold text-slate-950 hover:bg-amber-400 transition shadow-md shadow-amber-500/10 cursor-pointer"
             >
               <Plus size={14} /> Nova Rede
             </button>
           )}
           <button
-            onClick={() => setModalType('unit')}
-            disabled={networks.length === 0}
+            onClick={() => openModal('unit')}
+            disabled={displayNetworks.length === 0}
             className="flex items-center gap-1.5 rounded-xl bg-slate-800 border border-slate-700 px-3.5 py-2.5 text-xs font-bold text-white hover:bg-slate-700 disabled:opacity-50 transition cursor-pointer"
           >
             <Plus size={14} /> Nova Unidade
           </button>
           <button
-            onClick={() => setModalType('branch')}
-            disabled={units.length === 0}
+            onClick={() => openModal('branch')}
+            disabled={displayUnits.length === 0}
             className="flex items-center gap-1.5 rounded-xl bg-slate-800 border border-slate-700 px-3.5 py-2.5 text-xs font-bold text-white hover:bg-slate-700 disabled:opacity-50 transition cursor-pointer"
           >
             <Plus size={14} /> Nova Filial
           </button>
           <button
-            onClick={() => setModalType('cash_desk')}
-            disabled={branches.length === 0}
+            onClick={() => openModal('cash_desk')}
+            disabled={displayBranches.length === 0}
             className="flex items-center gap-1.5 rounded-xl bg-slate-800 border border-slate-700 px-3.5 py-2.5 text-xs font-bold text-white hover:bg-slate-700 disabled:opacity-50 transition cursor-pointer"
           >
             <Plus size={14} /> Novo Caixa
@@ -239,24 +309,28 @@ export default function RedesPage() {
       </div>
 
       {/* Árvore Hierárquica em Cards Interativos */}
-      {networks.length === 0 ? (
+      {displayNetworks.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-slate-800 bg-slate-900/30 p-12 text-center">
           <Building2 size={40} className="text-slate-600 mb-3" />
-          <h3 className="text-sm font-bold text-white">Nenhuma Rede Cadastrada</h3>
+          <h3 className="text-sm font-bold text-white">Nenhuma Rede Encontrada</h3>
           <p className="text-xs text-slate-400 max-w-md mt-1 mb-4">
-            Como Super Admin, seu primeiro passo é cadastrar a sua primeira Rede para criar as unidades e filiais vinculadas.
+            {isSuperAdmin
+              ? 'Como Super Admin, seu primeiro passo é cadastrar a sua primeira Rede para criar as unidades e filiais vinculadas.'
+              : 'Nenhuma rede associada ao seu perfil de administrador.'}
           </p>
-          <button
-            onClick={() => setModalType('network')}
-            className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2.5 text-xs font-extrabold text-slate-950 hover:bg-amber-400 transition"
-          >
-            <Plus size={15} /> Cadastrar Primeira Rede
-          </button>
+          {isSuperAdmin && (
+            <button
+              onClick={() => openModal('network')}
+              className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2.5 text-xs font-extrabold text-slate-950 hover:bg-amber-400 transition"
+            >
+              <Plus size={15} /> Cadastrar Primeira Rede
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-6">
-          {networks.map((net) => {
-            const netUnits = units.filter((u) => u.network_id === net.id)
+          {displayNetworks.map((net) => {
+            const netUnits = displayUnits.filter((u) => u.network_id === net.id)
 
             return (
               <div
@@ -291,7 +365,7 @@ export default function RedesPage() {
                 ) : (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {netUnits.map((unit) => {
-                      const unitBranches = branches.filter((b) => b.unit_id === unit.id)
+                      const unitBranches = displayBranches.filter((b) => b.unit_id === unit.id)
 
                       return (
                         <div
@@ -445,7 +519,7 @@ export default function RedesPage() {
                   onChange={(e) => setUnitNetworkId(e.target.value)}
                   className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-white focus:border-amber-500 focus:outline-none"
                 >
-                  {networks.map((n) => (
+                  {displayNetworks.map((n) => (
                     <option key={n.id} value={n.id}>{n.name}</option>
                   ))}
                 </select>
@@ -520,16 +594,43 @@ export default function RedesPage() {
             </p>
 
             <form onSubmit={handleCreateBranch} className="space-y-4 text-xs">
+              {displayNetworks.length > 1 && (
+                <div>
+                  <label className="font-semibold text-slate-300">Rede *</label>
+                  <select
+                    value={branchNetworkId}
+                    onChange={(e) => {
+                      const netId = e.target.value
+                      setBranchNetworkId(netId)
+                      const available = displayUnits.filter((u) => u.network_id === netId)
+                      setBranchUnitId(available[0]?.id || '')
+                    }}
+                    className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-white focus:border-amber-500 focus:outline-none"
+                  >
+                    {displayNetworks.map((n) => (
+                      <option key={n.id} value={n.id}>{n.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div>
                 <label className="font-semibold text-slate-300">Unidade / Regional Pertencente *</label>
                 <select
                   value={branchUnitId}
-                  onChange={(e) => setBranchUnitId(e.target.value)}
+                  onChange={(e) => {
+                    const uId = e.target.value
+                    setBranchUnitId(uId)
+                    const u = units.find((x) => x.id === uId)
+                    if (u) setBranchNetworkId(u.network_id)
+                  }}
                   className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-white focus:border-amber-500 focus:outline-none"
                 >
-                  {units.map((u) => (
-                    <option key={u.id} value={u.id}>{u.name}</option>
-                  ))}
+                  {displayUnits
+                    .filter((u) => !branchNetworkId || u.network_id === branchNetworkId)
+                    .map((u) => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
                 </select>
               </div>
 
@@ -607,7 +708,7 @@ export default function RedesPage() {
                   onChange={(e) => setCashDeskBranchId(e.target.value)}
                   className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-white focus:border-amber-500 focus:outline-none"
                 >
-                  {branches.map((b) => (
+                  {displayBranches.map((b) => (
                     <option key={b.id} value={b.id}>{b.name}</option>
                   ))}
                 </select>

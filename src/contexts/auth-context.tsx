@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { User } from '@supabase/supabase-js'
 
-interface Profile {
+export interface Profile {
   id: string
   tenant_id?: string | null
   network_id?: string | null
@@ -33,25 +33,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
 
   useEffect(() => {
     async function loadUser() {
       try {
-        const { data: { session } } = await supabase.auth.getSession()
-        setUser(session?.user ?? null)
-
-        if (session?.user) {
+        const { data: { user: authUser }, error } = await supabase.auth.getUser()
+        if (error || !authUser) {
+          setUser(null)
+          setProfile(null)
+        } else {
+          setUser(authUser)
           const { data: prof } = await supabase
             .from('profiles')
             .select('*')
-            .eq('id', session.user.id)
+            .eq('id', authUser.id)
             .single()
 
           setProfile(prof || null)
         }
       } catch (err) {
         console.error('Erro ao carregar usuário:', err)
+        setUser(null)
+        setProfile(null)
       } finally {
         setLoading(false)
       }
@@ -60,13 +64,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loadUser()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setUser(session?.user ?? null)
-        if (session?.user) {
+      async (_event, session) => {
+        const currentUser = session?.user ?? null
+        setUser(currentUser)
+        if (currentUser) {
           const { data: prof } = await supabase
             .from('profiles')
             .select('*')
-            .eq('id', session.user.id)
+            .eq('id', currentUser.id)
             .single()
           setProfile(prof || null)
         } else {
@@ -82,10 +87,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase])
 
   const signOut = async () => {
-    await supabase.auth.signOut()
-    setUser(null)
-    setProfile(null)
-    window.location.href = '/login'
+    try {
+      await supabase.auth.signOut()
+    } catch (err) {
+      console.error('Erro ao encerrar sessão:', err)
+    } finally {
+      setUser(null)
+      setProfile(null)
+      if (typeof window !== 'undefined') {
+        const keysToRemove: string[] = []
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i)
+          if (key && (key.startsWith('giro_cart') || key.startsWith('finish_cart'))) {
+            keysToRemove.push(key)
+          }
+        }
+        keysToRemove.forEach((key) => localStorage.removeItem(key))
+        window.location.href = '/login'
+      }
+    }
   }
 
   return (

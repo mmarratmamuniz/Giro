@@ -2,6 +2,8 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { Database } from '@/types/database'
+import { useAuth } from '@/contexts/auth-context'
+import { useNetwork } from '@/contexts/network-context'
 
 type Product = Database['public']['Tables']['products']['Row']
 
@@ -32,24 +34,36 @@ const CartContext = createContext<CartContextType>({
 })
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>(() => {
+  const { user } = useAuth()
+  const { selectedBranchId } = useNetwork()
+  const cartStorageKey = `giro_cart_${user?.id || 'anon'}_${selectedBranchId || 'none'}`
+
+  const [items, setItems] = useState<CartItem[]>([])
+  const [isLoaded, setIsLoaded] = useState(false)
+
+  // Carregar do localStorage escopado por usuário e filial
+  useEffect(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('giro_cart') || localStorage.getItem('finish_cart')
+      const saved = localStorage.getItem(cartStorageKey)
       if (saved) {
         try {
-          return JSON.parse(saved)
+          setItems(JSON.parse(saved))
         } catch {
-          return []
+          setItems([])
         }
+      } else {
+        setItems([])
       }
+      setIsLoaded(true)
     }
-    return []
-  })
+  }, [cartStorageKey])
 
-  // Salvar alterações no localStorage
+  // Salvar alterações no localStorage correspondente
   useEffect(() => {
-    localStorage.setItem('giro_cart', JSON.stringify(items))
-  }, [items])
+    if (isLoaded && typeof window !== 'undefined') {
+      localStorage.setItem(cartStorageKey, JSON.stringify(items))
+    }
+  }, [items, cartStorageKey, isLoaded])
 
   const addItem = (product: Product, quantity: number = 1) => {
     setItems((prev) => {
@@ -83,8 +97,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const clearCart = () => {
     setItems([])
-    localStorage.removeItem('giro_cart')
-    localStorage.removeItem('finish_cart')
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(cartStorageKey)
+    }
   }
 
   const totalAmount = items.reduce(

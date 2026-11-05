@@ -10,6 +10,7 @@ import { formatCurrency } from '@/lib/utils'
 import { CashShift } from '@/types/cash'
 import { CashShiftModal } from '@/components/pdv/cash-shift-modal'
 import { ThermalReceipt } from '@/components/pdv/thermal-receipt'
+import { useNetwork } from '@/contexts/network-context'
 import {
   Search,
   Plus,
@@ -19,16 +20,12 @@ import {
   QrCode,
   Banknote,
   CheckCircle2,
-  AlertCircle,
   Package,
   Sparkles,
   Receipt,
   X,
-  Percent,
-  DollarSign,
   Lock,
   Unlock,
-  Keyboard,
   ShoppingBag,
 } from 'lucide-react'
 import confetti from 'canvas-confetti'
@@ -63,22 +60,49 @@ export default function PDVPage() {
 
   const searchInputRef = useRef<HTMLInputElement>(null)
   const { items, addItem, removeItem, updateQuantity, clearCart, totalAmount, totalItems } = useCart()
-  const { user } = useAuth()
-  const { showError, openDialog } = useFeedback()
-  const supabase = createClient()
+  const { user, profile } = useAuth()
+  const { showError, showWarning, openDialog } = useFeedback()
+  const { branches, selectedBranchId, selectedNetworkId } = useNetwork()
+  const [supabase] = useState(() => createClient())
 
-  // Buscar Caixa Aberto Atual
+  const isCashier = profile?.role === 'cashier_operator' || profile?.role === 'operator'
+
+  // Buscar Caixa Aberto Atual (priorizando o operador logado)
   async function loadShift() {
     try {
-      const { data } = await supabase
+      if (!user) return
+      const targetBranch = profile?.branch_id || (selectedBranchId !== 'ALL' ? selectedBranchId : null)
+
+      let query = supabase
         .from('cash_shifts')
-        .select('*')
+        .select('*, cash_desk:cash_desks(name)')
         .eq('status', 'OPEN')
         .order('opened_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
 
-      setCurrentShift(data || null)
+      if (targetBranch) {
+        query = query.eq('branch_id', targetBranch)
+      }
+
+      // 1. Prioriza o turno aberto pelo operador logado
+      const { data: userShifts } = await query.eq('user_id', user.id).limit(1)
+      if (userShifts && userShifts.length > 0) {
+        setCurrentShift(userShifts[0])
+        return
+      }
+
+      // 2. Se o operador não tiver turno pessoal, busca turno da filial
+      let branchQuery = supabase
+        .from('cash_shifts')
+        .select('*, cash_desk:cash_desks(name)')
+        .eq('status', 'OPEN')
+        .order('opened_at', { ascending: false })
+
+      if (targetBranch) {
+        branchQuery = branchQuery.eq('branch_id', targetBranch)
+      }
+
+      const { data: branchShifts } = await branchQuery.limit(1)
+      setCurrentShift(branchShifts && branchShifts.length > 0 ? branchShifts[0] : null)
     } catch (err) {
       console.error('Erro ao verificar turno de caixa:', err)
     }
@@ -89,11 +113,15 @@ export default function PDVPage() {
     try {
       setLoading(true)
       const [prodRes, catRes] = await Promise.all([
-        supabase.from('products').select('*, category:categories(*)').eq('is_active', true).order('name'),
+        supabase
+          .from('products')
+          .select('*, category:categories(*), branch:branches(name)')
+          .eq('is_active', true)
+          .order('name'),
         supabase.from('categories').select('*').order('name'),
       ])
 
-      if (prodRes.data) setProducts(prodRes.data)
+      if (prodRes.data) setProducts(prodRes.data as any)
       if (catRes.data) setCategories(catRes.data)
     } catch (err) {
       console.error('Erro ao carregar dados do PDV:', err)
@@ -104,8 +132,11 @@ export default function PDVPage() {
 
   useEffect(() => {
     loadData()
-    loadShift()
   }, [])
+
+  useEffect(() => {
+    loadShift()
+  }, [selectedBranchId, profile?.branch_id, user?.id])
 
   // Disparar abertura de pagamento (com validação de caixa)
   const handleOpenPayment = () => {
@@ -150,36 +181,67 @@ export default function PDVPage() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [items.length, isPaymentModalOpen, isShiftModalOpen, saleSuccess, currentShift])
 
-  // Cálculo do Desconto
+  // Cálculo do Desconto (com teto de 10% para caixas)
   const rawDiscount = parseFloat(discountInput) || 0
-  const discountAmount =
+  let calculatedDiscount =
     discountType === 'percent'
       ? (totalAmount * Math.min(100, rawDiscount)) / 100
       : Math.min(totalAmount, rawDiscount)
 
+  if (isCashier) {
+    const maxDiscount = totalAmount * 0.10
+    if (calculatedDiscount > maxDiscount) {
+      calculatedDiscount = maxDiscount
+    }
+  }
+
+  const discountAmount = calculatedDiscount
   const finalTotalToPay = Math.max(0, totalAmount - discountAmount)
   const changeDue = Math.max(0, (parseFloat(cashGiven) || 0) - finalTotalToPay)
 
   // Filtragem de Produtos
-  const filteredProducts = products.filter((p) => {
+  const filteredProducts = products.filter((p: any) => {
     const matchesSearch =
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.sku.toLowerCase().includes(search.toLowerCase())
     const matchesCategory = selectedCategory ? p.category_id === selectedCategory : true
-    return matchesSearch && matchesCategory
+    const matchesBranch =
+      selectedBranchId === 'ALL'
+        ? true
+        : p.branch_id === selectedBranchId || !p.branch_id
+    const matchesNetwork =
+      selectedNetworkId === 'ALL'
+        ? true
+        : p.network_id === selectedNetworkId || !p.network_id
+
+    return matchesSearch && matchesCategory && matchesBranch && matchesNetwork
   })
 
   // Atalho Enter para leitor de código de barras
   const handleKeyDownSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault()
-      const exactSku = products.find((p) => p.sku.toLowerCase() === search.trim().toLowerCase())
-      if (exactSku) {
-        addItem(exactSku, 1)
+      const searchTrim = search.trim().toLowerCase()
+      if (!searchTrim) return
+
+      const found =
+        filteredProducts.find((p) => p.sku.toLowerCase() === searchTrim || p.name.toLowerCase() === searchTrim) ||
+        (filteredProducts.length === 1 ? filteredProducts[0] : null)
+
+      if (found) {
+        if (found.stock_quantity <= 0) {
+          showError('Sem Estoque', `O produto "${found.name}" está com estoque esgotado.`)
+          return
+        }
+        const itemInCart = items.find((it) => it.product.id === found.id)
+        if (itemInCart && itemInCart.quantity >= found.stock_quantity) {
+          showError('Limite de Estoque', `Não é possível adicionar mais unidades de "${found.name}". Estoque máximo atingido (${found.stock_quantity} un).`)
+          return
+        }
+        addItem(found, 1)
         setSearch('')
-      } else if (filteredProducts.length === 1) {
-        addItem(filteredProducts[0], 1)
-        setSearch('')
+      } else {
+        showError('Não Encontrado', 'Nenhum produto correspondente na filial ou catálogo ativo.')
       }
     }
   }
@@ -188,6 +250,15 @@ export default function PDVPage() {
   const handleFinishSale = async () => {
     if (items.length === 0) return
 
+    // Validação de dinheiro recebido
+    if (paymentMethod === 'Dinheiro' && cashGiven) {
+      const given = parseFloat(cashGiven) || 0
+      if (given < finalTotalToPay) {
+        showError('Valor Insuficiente', `O valor recebido em dinheiro (${formatCurrency(given)}) é menor que o total a pagar (${formatCurrency(finalTotalToPay)}).`)
+        return
+      }
+    }
+
     try {
       setSubmitting(true)
       const payload = items.map((item) => ({
@@ -195,15 +266,25 @@ export default function PDVPage() {
         quantity: item.quantity,
       }))
 
+      const targetBranchId =
+        (currentShift as any)?.branch_id ||
+        (selectedBranchId !== 'ALL' ? selectedBranchId : branches[0]?.id || null)
+      const targetDeskId = (currentShift as any)?.cash_desk_id || null
+
       const { data, error } = await supabase.rpc('create_complete_sale', {
         p_payment_method: paymentMethod,
         p_items: payload,
         p_user_id: user?.id || null,
         p_discount_amount: discountAmount,
         p_shift_id: currentShift?.id || null,
+        p_branch_id: targetBranchId,
+        p_cash_desk_id: targetDeskId,
       })
 
       if (error) throw error
+
+      // Atualiza imediatamente o estoque dos produtos na tela
+      await loadData()
 
       confetti({
         particleCount: 80,
@@ -211,14 +292,21 @@ export default function PDVPage() {
         origin: { y: 0.6 },
       })
 
+      const branchObj = branches.find((b) => b.id === targetBranchId)
+      const activeBranchName = branchObj?.name || 'Geral'
+      const activeDeskName = (currentShift as any)?.cash_desk?.name || 'Caixa 01'
+
       setSaleSuccess({
         id: (data as any)?.sale_id,
         grossAmount: totalAmount,
         discountAmount: discountAmount,
         total: finalTotalToPay,
         method: paymentMethod,
-        cashGiven: paymentMethod === 'Dinheiro' ? parseFloat(cashGiven) || finalTotalToPay : undefined,
+        cashGiven: paymentMethod === 'Dinheiro' && cashGiven ? parseFloat(cashGiven) : undefined,
         changeDue: changeDue,
+        branchName: activeBranchName,
+        cashDeskName: activeDeskName,
+        operatorName: profile?.full_name || (user as any)?.user_metadata?.full_name || 'Operador',
         items: items.map((it) => ({
           product_name: it.product.name,
           quantity: it.quantity,
@@ -260,7 +348,7 @@ export default function PDVPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsShiftModalOpen(true)}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-bold transition ${
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-bold transition cursor-pointer ${
                 currentShift
                   ? 'bg-slate-800 text-amber-400 hover:bg-slate-700'
                   : 'bg-emerald-500 text-slate-950 hover:bg-emerald-400'
@@ -290,7 +378,7 @@ export default function PDVPage() {
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
           <button
             onClick={() => setSelectedCategory(null)}
-            className={`shrink-0 rounded-xl px-3.5 py-1.5 text-xs font-bold transition ${
+            className={`shrink-0 rounded-xl px-3.5 py-1.5 text-xs font-bold transition cursor-pointer ${
               selectedCategory === null
                 ? 'bg-amber-500 text-slate-950 shadow-sm'
                 : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
@@ -302,7 +390,7 @@ export default function PDVPage() {
             <button
               key={cat.id}
               onClick={() => setSelectedCategory(cat.id)}
-              className={`shrink-0 rounded-xl px-3.5 py-1.5 text-xs font-bold transition ${
+              className={`shrink-0 rounded-xl px-3.5 py-1.5 text-xs font-bold transition cursor-pointer ${
                 selectedCategory === cat.id
                   ? 'bg-amber-500 text-slate-950 shadow-sm'
                   : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
@@ -331,12 +419,20 @@ export default function PDVPage() {
                 return (
                   <button
                     key={p.id}
-                    onClick={() => !isOutOfStock && addItem(p, 1)}
+                    onClick={() => {
+                      if (isOutOfStock) return
+                      const itemInCart = items.find((it) => it.product.id === p.id)
+                      if (itemInCart && itemInCart.quantity >= p.stock_quantity) {
+                        showWarning('Limite de Estoque', `Estoque máximo atingido para "${p.name}" (${p.stock_quantity} un).`)
+                        return
+                      }
+                      addItem(p, 1)
+                    }}
                     disabled={isOutOfStock}
                     className={`flex flex-col justify-between rounded-xl border p-3 text-left transition-all group ${
                       isOutOfStock
                         ? 'border-slate-800/60 bg-slate-950/40 opacity-50 cursor-not-allowed'
-                        : 'border-slate-800 bg-slate-950/60 hover:border-amber-500/50 hover:bg-slate-900 shadow-sm'
+                        : 'border-slate-800 bg-slate-950/60 hover:border-amber-500/50 hover:bg-slate-900 shadow-sm cursor-pointer'
                     }`}
                   >
                     <div>
@@ -406,7 +502,7 @@ export default function PDVPage() {
             {items.length > 0 && (
               <button
                 onClick={clearCart}
-                className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-rose-400 hover:bg-rose-500/10 transition"
+                className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
               >
                 <Trash2 size={12} /> Limpar
               </button>
@@ -441,7 +537,7 @@ export default function PDVPage() {
                     <div className="flex items-center gap-1 rounded-lg bg-slate-900 border border-slate-800 p-0.5">
                       <button
                         onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
-                        className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+                        className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white cursor-pointer"
                       >
                         <Minus size={10} />
                       </button>
@@ -449,8 +545,14 @@ export default function PDVPage() {
                         {item.quantity}
                       </span>
                       <button
-                        onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                        className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+                        onClick={() => {
+                          if (item.quantity >= item.product.stock_quantity) {
+                            showWarning('Limite de Estoque', `Estoque máximo atingido para "${item.product.name}" (${item.product.stock_quantity} un).`)
+                            return
+                          }
+                          updateQuantity(item.product.id, item.quantity + 1)
+                        }}
+                        className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-white cursor-pointer"
                       >
                         <Plus size={10} />
                       </button>
@@ -506,6 +608,12 @@ export default function PDVPage() {
             )}
           </div>
 
+          {isCashier && rawDiscount > 0 && calculatedDiscount === totalAmount * 0.10 && (
+            <p className="text-[9px] text-amber-400 font-medium">
+              * Desconto limitado a 10% do total para operador de caixa.
+            </p>
+          )}
+
           {/* Subtotal e Total Líquido */}
           <div className="space-y-1 text-xs">
             {discountAmount > 0 && (
@@ -527,7 +635,7 @@ export default function PDVPage() {
           <button
             onClick={handleOpenPayment}
             disabled={items.length === 0}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 py-3 text-xs font-extrabold text-slate-950 shadow-lg shadow-amber-500/20 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 py-3 text-xs font-extrabold text-slate-950 shadow-lg shadow-amber-500/20 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
           >
             <Sparkles size={16} /> Finalizar Venda [F8]
           </button>
@@ -593,7 +701,7 @@ export default function PDVPage() {
                   <button
                     key={m.id}
                     onClick={() => setPaymentMethod(m.id as any)}
-                    className={`flex items-center gap-2 rounded-xl border p-3 text-xs font-bold transition ${
+                    className={`flex items-center gap-2 rounded-xl border p-3 text-xs font-bold transition cursor-pointer ${
                       isSelected
                         ? 'border-amber-500 bg-amber-500/10 text-amber-400 ring-1 ring-amber-500'
                         : 'border-slate-800 bg-slate-950 text-slate-300 hover:border-slate-700'
@@ -614,6 +722,7 @@ export default function PDVPage() {
                   <input
                     type="number"
                     step="0.01"
+                    min="0"
                     autoFocus
                     placeholder="0,00"
                     value={cashGiven}
@@ -631,7 +740,7 @@ export default function PDVPage() {
             <button
               onClick={handleFinishSale}
               disabled={submitting}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3.5 text-xs font-extrabold text-slate-950 hover:bg-emerald-400 disabled:opacity-50 transition"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3.5 text-xs font-extrabold text-slate-950 hover:bg-emerald-400 disabled:opacity-50 transition cursor-pointer"
             >
               {submitting ? 'Emitindo Venda...' : 'Confirmar e Concluir Venda [Enter]'}
             </button>
@@ -650,7 +759,7 @@ export default function PDVPage() {
               </div>
               <button
                 onClick={() => setSaleSuccess(null)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+                className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white cursor-pointer"
               >
                 <X size={18} />
               </button>
@@ -667,6 +776,9 @@ export default function PDVPage() {
               totalAmount={saleSuccess.total}
               cashGiven={saleSuccess.cashGiven}
               changeDue={saleSuccess.changeDue}
+              branchName={saleSuccess.branchName}
+              cashDeskName={saleSuccess.cashDeskName}
+              operatorName={saleSuccess.operatorName}
               onClose={() => setSaleSuccess(null)}
             />
           </div>
@@ -678,7 +790,10 @@ export default function PDVPage() {
         currentShift={currentShift}
         isOpen={isShiftModalOpen}
         onClose={() => setIsShiftModalOpen(false)}
-        onSuccess={() => loadShift()}
+        onSuccess={() => {
+          loadShift()
+          loadData()
+        }}
       />
     </div>
   )

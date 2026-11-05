@@ -64,11 +64,8 @@ export function Sidebar() {
       <aside
         className={cn(
           'fixed inset-y-0 left-0 z-50 flex flex-col border-r border-slate-800 bg-slate-900 text-slate-100 transition-all duration-300',
-          // No Desktop (lg): posição relativa normal no fluxo
           'lg:static lg:translate-x-0',
-          // No Mobile: gaveta deslizante
           isMobileOpen ? 'translate-x-0 w-72 shadow-2xl' : '-translate-x-full w-72 lg:w-64',
-          // Estado recolhido (apenas no desktop)
           collapsed && 'lg:w-20'
         )}
       >
@@ -108,11 +105,23 @@ export function Sidebar() {
           </button>
         </div>
 
-        {/* Navegação de Menus */}
+        {/* Navegação de Menus (bloqueada se !profile) */}
         <nav className="flex-1 space-y-1.5 p-3 overflow-y-auto">
-          {navItems.map((item) => {
-            // Se for operador de caixa, só vê a Frente de Caixa (PDV)
-            if (profile?.role === 'operator' && item.href !== '/pdv') {
+          {!profile ? null : navItems.map((item) => {
+            const isCashier = profile.role === 'cashier_operator' || profile.role === 'operator'
+
+            // Se for operador de caixa, só vê a Frente de Caixa (PDV) e Controle de Caixa
+            if (isCashier && item.href !== '/pdv' && item.href !== '/caixa') {
+              return null
+            }
+
+            // Administrador de Rede não opera balcão de vendas (PDV)
+            if (item.href === '/pdv' && profile.role === 'network_admin') {
+              return null
+            }
+
+            // Redes & Filiais é restrito exclusivamente a Super Admin e Network Admin (branch_admin e unit_admin não acessam)
+            if (item.href === '/redes' && profile.role !== 'super_admin' && profile.role !== 'network_admin') {
               return null
             }
 
@@ -156,7 +165,7 @@ export function Sidebar() {
             {(!collapsed || isMobileOpen) && (
               <div className="flex flex-1 flex-col overflow-hidden">
                 <span className="truncate text-xs font-semibold text-white">
-                  {profile?.full_name || 'Operador'}
+                  {profile?.full_name || 'Usuário'}
                 </span>
                 <span className="text-[10px] font-medium text-amber-400 capitalize">
                   {profile?.role === 'super_admin'
@@ -169,7 +178,7 @@ export function Sidebar() {
                     ? 'Admin Filial'
                     : profile?.role === 'admin'
                     ? 'Administrador'
-                    : 'Operador'}
+                    : profile?.role ? 'Operador' : 'Carregando...'}
                 </span>
               </div>
             )}

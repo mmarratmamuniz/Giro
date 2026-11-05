@@ -13,8 +13,14 @@ import {
   Layers,
   ArrowUpRight,
   Truck,
+  Store,
+  Award,
+  ChevronRight,
+  History,
 } from 'lucide-react'
 import Link from 'next/link'
+import { useAuth } from '@/contexts/auth-context'
+import { useNetwork } from '@/contexts/network-context'
 import {
   ResponsiveContainer,
   BarChart,
@@ -26,6 +32,14 @@ import {
   AreaChart,
   Area,
 } from 'recharts'
+
+interface BranchRanking {
+  id: string
+  name: string
+  salesCount: number
+  totalSales: number
+  percentOfTotal: number
+}
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
@@ -39,63 +53,92 @@ export default function DashboardPage() {
   })
   const [salesByDay, setSalesByDay] = useState<{ date: string; total: number }[]>([])
   const [topProducts, setTopProducts] = useState<{ name: string; qty: number; total: number }[]>([])
+  const [branchRanking, setBranchRanking] = useState<BranchRanking[]>([])
+  const { profile } = useAuth()
+  const { selectedBranchId, selectedNetworkId, branches, setSelectedBranchId } = useNetwork()
   const supabase = createClient()
 
   useEffect(() => {
     async function loadDashboardData() {
       try {
         setLoading(true)
-        const today = new Date()
-        const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString()
-        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString()
+        const now = new Date()
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).toISOString()
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0).toISOString()
 
-        // 1. Vendas de Hoje (Apenas Concluídas)
-        const { data: salesTodayData } = await supabase
+        // 1. Vendas de Hoje
+        let salesTodayQuery = supabase
           .from('sales')
           .select('id, total_amount, discount_amount')
           .neq('status', 'CANCELED')
           .gte('date', startOfDay)
+
+        // 2. Vendas do Mês
+        let salesMonthQuery = supabase
+          .from('sales')
+          .select('id, total_amount, branch_id')
+          .neq('status', 'CANCELED')
+          .gte('date', startOfMonth)
+
+        // 3. Compras Hoje
+        let purchasesTodayQuery = supabase
+          .from('purchases')
+          .select('total_amount')
+          .gte('date', startOfDay)
+
+        // 4. Produtos e Estoque Crítico
+        let productsQuery = supabase
+          .from('products')
+          .select('*')
+          .eq('is_active', true)
+
+        if (selectedBranchId !== 'ALL') {
+          salesTodayQuery = salesTodayQuery.eq('branch_id', selectedBranchId)
+          salesMonthQuery = salesMonthQuery.eq('branch_id', selectedBranchId)
+          purchasesTodayQuery = purchasesTodayQuery.eq('branch_id', selectedBranchId)
+          const netId = selectedNetworkId !== 'ALL' ? selectedNetworkId : branches.find((b) => b.id === selectedBranchId)?.network_id
+          if (netId) {
+            productsQuery = productsQuery.eq('network_id', netId)
+          }
+        } else if (selectedNetworkId !== 'ALL') {
+          salesTodayQuery = salesTodayQuery.eq('network_id', selectedNetworkId)
+          salesMonthQuery = salesMonthQuery.eq('network_id', selectedNetworkId)
+          purchasesTodayQuery = purchasesTodayQuery.eq('network_id', selectedNetworkId)
+          productsQuery = productsQuery.eq('network_id', selectedNetworkId)
+        }
+
+        const [
+          { data: salesTodayData },
+          { data: salesMonthData },
+          { data: purchasesTodayData },
+          { data: productsData },
+        ] = await Promise.all([
+          salesTodayQuery,
+          salesMonthQuery,
+          purchasesTodayQuery,
+          productsQuery,
+        ])
 
         const todayTotal = (salesTodayData || []).reduce(
           (sum, s) => sum + Number(s.total_amount),
           0
         )
 
-        // 2. Vendas do Mês (Apenas Concluídas)
-        const { data: salesMonthData } = await supabase
-          .from('sales')
-          .select('total_amount')
-          .neq('status', 'CANCELED')
-          .gte('date', startOfMonth)
-
         const monthTotal = (salesMonthData || []).reduce(
           (sum, s) => sum + Number(s.total_amount),
           0
         )
-
-        // 3. Compras Hoje
-        const { data: purchasesTodayData } = await supabase
-          .from('purchases')
-          .select('total_amount')
-          .gte('date', startOfDay)
 
         const purchasesTodayTotal = (purchasesTodayData || []).reduce(
           (sum, p) => sum + Number(p.total_amount),
           0
         )
 
-        // 4. Produtos e Estoque Crítico
-        const { data: productsData } = await supabase
-          .from('products')
-          .select('*')
-          .eq('is_active', true)
-
         const lowStock = (productsData || []).filter(
           (p) => p.stock_quantity <= p.min_stock
         ).length
 
         // 5. Lucro Estimado Real & Itens Vendidos (Hoje)
-        // Lucro Real = Total Efetivamente Recebido - Custo Total dos Produtos Vendidos
         const todaySaleIds = (salesTodayData || []).map((s) => s.id)
 
         let totalCostToday = 0
@@ -104,14 +147,14 @@ export default function DashboardPage() {
         if (todaySaleIds.length > 0) {
           const { data: saleItemsData } = await supabase
             .from('sale_items')
-            .select('quantity, unit_price, product_id, sale_id, products(cost_price)')
+            .select('quantity, unit_price, unit_cost, product_id, sale_id, products(cost_price)')
             .in('sale_id', todaySaleIds)
 
           if (saleItemsData) {
             saleItemsData.forEach((item: any) => {
-              const qty = item.quantity || 0
-              const costP = Number(item.products?.cost_price) || 0
-              totalCostToday += qty * costP
+              const qty = Number(item.quantity) || 0
+              const unitCost = Number(item.unit_cost) > 0 ? Number(item.unit_cost) : Number(item.products?.cost_price || 0)
+              totalCostToday += qty * unitCost
               totalItemsSold += qty
             })
           }
@@ -129,22 +172,27 @@ export default function DashboardPage() {
         })
 
         // 6. Dados dos últimos 7 dias para o gráfico
-        const sevenDaysAgo = new Date()
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
-        sevenDaysAgo.setHours(0, 0, 0, 0)
+        const sevenDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0)
 
-        const { data: recentSales } = await supabase
+        let recentSalesQuery = supabase
           .from('sales')
           .select('date, total_amount')
           .neq('status', 'CANCELED')
           .gte('date', sevenDaysAgo.toISOString())
           .order('date', { ascending: true })
 
+        if (selectedBranchId !== 'ALL') {
+          recentSalesQuery = recentSalesQuery.eq('branch_id', selectedBranchId)
+        } else if (selectedNetworkId !== 'ALL') {
+          recentSalesQuery = recentSalesQuery.eq('network_id', selectedNetworkId)
+        }
+
+        const { data: recentSales } = await recentSalesQuery
+
         // Agrupar por dia
         const daysMap: Record<string, number> = {}
         for (let i = 0; i < 7; i++) {
-          const d = new Date(sevenDaysAgo)
-          d.setDate(d.getDate() + i)
+          const d = new Date(sevenDaysAgo.getFullYear(), sevenDaysAgo.getMonth(), sevenDaysAgo.getDate() + i)
           const key = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
           daysMap[key] = 0
         }
@@ -165,11 +213,19 @@ export default function DashboardPage() {
           Object.entries(daysMap).map(([date, total]) => ({ date, total }))
         )
 
-        // 7. Top Produtos Vendidos
-        const { data: topData } = await supabase
+        // 7. Top Produtos Vendidos (Apenas status = 'COMPLETED' e respeitando a rede/filial ativa)
+        let topItemsQuery = supabase
           .from('sale_items')
-          .select('quantity, unit_price, products(name)')
-          .limit(100)
+          .select('quantity, unit_price, products(name), sales!inner(status, branch_id, network_id)')
+          .eq('sales.status', 'COMPLETED')
+
+        if (selectedBranchId !== 'ALL') {
+          topItemsQuery = topItemsQuery.eq('sales.branch_id', selectedBranchId)
+        } else if (selectedNetworkId !== 'ALL') {
+          topItemsQuery = topItemsQuery.eq('sales.network_id', selectedNetworkId)
+        }
+
+        const { data: topData } = await topItemsQuery.limit(300)
 
         const prodMap: Record<string, { qty: number; total: number }> = {}
         if (topData) {
@@ -178,8 +234,9 @@ export default function DashboardPage() {
             if (!prodMap[name]) {
               prodMap[name] = { qty: 0, total: 0 }
             }
-            prodMap[name].qty += item.quantity
-            prodMap[name].total += item.quantity * Number(item.unit_price)
+            const qty = Number(item.quantity) || 0
+            prodMap[name].qty += qty
+            prodMap[name].total += qty * Number(item.unit_price || 0)
           })
         }
 
@@ -189,6 +246,39 @@ export default function DashboardPage() {
           .slice(0, 5)
 
         setTopProducts(sortedProds)
+
+        // 8. Ranking Comparativo de Filiais (Visão Rede)
+        if (selectedBranchId === 'ALL' && branches.length > 0) {
+          const bMap: Record<string, { name: string; salesCount: number; totalSales: number }> = {}
+
+          branches.forEach((b) => {
+            if (selectedNetworkId === 'ALL' || b.network_id === selectedNetworkId) {
+              bMap[b.id] = { name: b.name, salesCount: 0, totalSales: 0 }
+            }
+          })
+
+          ;(salesMonthData || []).forEach((s: any) => {
+            const bId = s.branch_id
+            if (bId && bMap[bId]) {
+              bMap[bId].totalSales += Number(s.total_amount)
+              bMap[bId].salesCount += 1
+            }
+          })
+
+          const ranking = Object.entries(bMap)
+            .map(([id, val]) => ({
+              id,
+              name: val.name,
+              salesCount: val.salesCount,
+              totalSales: val.totalSales,
+              percentOfTotal: monthTotal > 0 ? (val.totalSales / monthTotal) * 100 : 0,
+            }))
+            .sort((a, b) => b.totalSales - a.totalSales)
+
+          setBranchRanking(ranking)
+        } else {
+          setBranchRanking([])
+        }
       } catch (err) {
         console.error('Erro ao buscar métricas do dashboard:', err)
       } finally {
@@ -197,7 +287,7 @@ export default function DashboardPage() {
     }
 
     loadDashboardData()
-  }, [supabase])
+  }, [selectedBranchId, selectedNetworkId, branches])
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -247,7 +337,7 @@ export default function DashboardPage() {
             <h3 className="text-2xl font-black tracking-tight text-blue-400">
               {formatCurrency(metrics.estimatedProfit)}
             </h3>
-            <p className="mt-1 text-[11px] text-slate-500">Vendas - Custo de Aquisição</p>
+            <p className="mt-1 text-[11px] text-slate-500">Vendas - Custo CMV</p>
           </div>
         </div>
 
@@ -404,14 +494,118 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <Link
-            href="/pdv"
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 py-3 text-xs font-bold text-slate-950 hover:bg-amber-400 shadow-md shadow-amber-500/20 transition"
-          >
-            <ShoppingCart size={16} /> Abrir Frente de Caixa
-          </Link>
+          {profile?.role === 'network_admin' ? (
+            <Link
+              href="/historico"
+              className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-800 border border-slate-700 py-3 text-xs font-bold text-slate-200 hover:bg-slate-700 hover:text-white transition"
+            >
+              <History size={16} /> Ver Histórico de Vendas
+            </Link>
+          ) : (
+            <Link
+              href="/pdv"
+              className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 py-3 text-xs font-bold text-slate-950 hover:bg-amber-400 shadow-md shadow-amber-500/20 transition"
+            >
+              <ShoppingCart size={16} /> Abrir Frente de Caixa
+            </Link>
+          )}
         </div>
       </div>
+
+      {/* Ranking & Performance de Filiais (Consolidado da Rede) */}
+      {selectedBranchId === 'ALL' && branchRanking.length > 1 && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400">
+                <Store size={22} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-base font-bold text-white">Ranking de Performance por Loja</h4>
+                  <span className="rounded-full bg-amber-500/10 px-2.5 py-0.5 text-[10px] font-bold text-amber-400 border border-amber-500/20">
+                    Visão Rede
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Comparativo de faturamento e participação percentual no mês
+                </p>
+              </div>
+            </div>
+
+            <Link
+              href="/relatorios"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-400 hover:text-amber-300 transition"
+            >
+              Relatório DRE Completo <ChevronRight size={14} />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {branchRanking.map((branch, idx) => {
+              const isFirst = idx === 0
+              const isSecond = idx === 1
+              const medal = isFirst ? '🥇' : isSecond ? '🥈' : '🥉'
+              const avgTicket = branch.salesCount > 0 ? branch.totalSales / branch.salesCount : 0
+
+              return (
+                <div
+                  key={branch.id}
+                  className={`relative overflow-hidden rounded-xl border p-5 transition ${
+                    isFirst
+                      ? 'border-amber-500/30 bg-gradient-to-b from-amber-500/5 to-transparent'
+                      : 'border-slate-800 bg-slate-950/40 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">{medal}</span>
+                      <div>
+                        <h5 className="text-sm font-bold text-white">{branch.name}</h5>
+                        <p className="text-[11px] text-slate-400">
+                          {branch.salesCount} {branch.salesCount === 1 ? 'venda' : 'vendas'}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="rounded-lg bg-slate-800 px-2.5 py-1 text-xs font-black text-amber-400">
+                      {branch.percentOfTotal.toFixed(1)}%
+                    </span>
+                  </div>
+
+                  <div className="mt-4">
+                    <div className="text-2xl font-black text-emerald-400">
+                      {formatCurrency(branch.totalSales)}
+                    </div>
+                    <div className="mt-1 flex items-center justify-between text-[11px] text-slate-500">
+                      <span>Ticket Médio</span>
+                      <span className="font-semibold text-slate-300">{formatCurrency(avgTicket)}</span>
+                    </div>
+                  </div>
+
+                  {/* Barra de Progresso de Participação */}
+                  <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+                    <div
+                      className={`h-full rounded-full ${
+                        isFirst ? 'bg-amber-400' : isSecond ? 'bg-blue-400' : 'bg-emerald-400'
+                      }`}
+                      style={{ width: `${Math.min(100, Math.max(0, branch.percentOfTotal))}%` }}
+                    />
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-slate-800/80 flex justify-end">
+                    <button
+                      onClick={() => setSelectedBranchId(branch.id)}
+                      className="text-[11px] font-semibold text-slate-400 hover:text-amber-400 transition flex items-center gap-1 cursor-pointer"
+                    >
+                      Filtrar esta Loja <ChevronRight size={12} />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

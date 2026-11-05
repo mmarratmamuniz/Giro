@@ -5,16 +5,13 @@ import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { CashShift } from '@/types/cash'
 import { CashShiftModal } from '@/components/pdv/cash-shift-modal'
+import { useNetwork } from '@/contexts/network-context'
 import {
   DollarSign,
   Lock,
   Unlock,
   ArrowDownRight,
   ArrowUpRight,
-  History,
-  Calendar,
-  Layers,
-  AlertCircle,
 } from 'lucide-react'
 
 export default function CaixaPage() {
@@ -23,30 +20,48 @@ export default function CaixaPage() {
   const [transactions, setTransactions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
-
-  const supabase = createClient()
+  const { selectedBranchId, selectedNetworkId } = useNetwork()
+  const [supabase] = useState(() => createClient())
 
   async function loadCaixaData() {
     try {
       setLoading(true)
+      let shiftsQuery = supabase
+        .from('cash_shifts')
+        .select('*, branch:branches(name), cash_desk:cash_desks(name)')
+        .order('opened_at', { ascending: false })
+        .limit(30)
+
+      let curQuery = supabase
+        .from('cash_shifts')
+        .select('*, branch:branches(name), cash_desk:cash_desks(name)')
+        .eq('status', 'OPEN')
+        .order('opened_at', { ascending: false })
+
+      let transQuery = supabase
+        .from('cash_transactions')
+        .select('*, shift:cash_shifts!inner(id, branch_id, network_id, cash_desk:cash_desks(name))')
+        .order('created_at', { ascending: false })
+        .limit(50)
+
+      if (selectedBranchId !== 'ALL') {
+        shiftsQuery = shiftsQuery.eq('branch_id', selectedBranchId)
+        curQuery = curQuery.eq('branch_id', selectedBranchId)
+        transQuery = transQuery.eq('shift.branch_id', selectedBranchId)
+      } else if (selectedNetworkId !== 'ALL') {
+        shiftsQuery = shiftsQuery.eq('network_id', selectedNetworkId)
+        curQuery = curQuery.eq('network_id', selectedNetworkId)
+        transQuery = transQuery.eq('shift.network_id', selectedNetworkId)
+      }
+
       const [shiftsRes, curRes, transRes] = await Promise.all([
-        supabase.from('cash_shifts').select('*').order('opened_at', { ascending: false }).limit(30),
-        supabase
-          .from('cash_shifts')
-          .select('*')
-          .eq('status', 'OPEN')
-          .order('opened_at', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        supabase
-          .from('cash_transactions')
-          .select('*, shift:cash_shifts(id)')
-          .order('created_at', { ascending: false })
-          .limit(50),
+        shiftsQuery,
+        curQuery.limit(1).maybeSingle(),
+        transQuery,
       ])
 
-      if (shiftsRes.data) setShifts(shiftsRes.data)
-      setCurrentShift(curRes.data || null)
+      if (shiftsRes.data) setShifts(shiftsRes.data as any)
+      setCurrentShift((curRes.data as any) || null)
       if (transRes.data) setTransactions(transRes.data)
     } catch (err) {
       console.error('Erro ao carregar dados de caixa:', err)
@@ -57,7 +72,7 @@ export default function CaixaPage() {
 
   useEffect(() => {
     loadCaixaData()
-  }, [])
+  }, [selectedBranchId, selectedNetworkId])
 
   return (
     <div className="space-y-8 animate-in fade-in duration-200">
@@ -97,7 +112,7 @@ export default function CaixaPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setIsModalOpen(true)}
-            className={`flex items-center gap-2 rounded-xl px-5 py-3 text-xs font-extrabold text-slate-950 transition ${
+            className={`flex items-center gap-2 rounded-xl px-5 py-3 text-xs font-extrabold text-slate-950 transition cursor-pointer ${
               currentShift
                 ? 'bg-amber-500 hover:bg-amber-400 shadow-md shadow-amber-500/20'
                 : 'bg-emerald-500 hover:bg-emerald-400 shadow-md shadow-emerald-500/20'
@@ -110,9 +125,9 @@ export default function CaixaPage() {
       </div>
 
       {/* Grade de Histórico de Fechamentos e Transações */}
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        {/* Histórico de Fechamentos */}
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 space-y-4">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+        {/* Histórico de Fechamentos (7 colunas) */}
+        <div className="lg:col-span-7 rounded-2xl border border-slate-800 bg-slate-900/60 p-6 space-y-4">
           <div className="flex items-center justify-between">
             <h4 className="text-base font-bold text-white">Histórico de Fechamentos de Caixa</h4>
             <span className="text-xs text-slate-400 font-medium">Últimos 30 turnos</span>
@@ -123,49 +138,65 @@ export default function CaixaPage() {
               <thead className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-bold uppercase">
                 <tr>
                   <th className="py-2.5 px-3">Turno</th>
+                  <th className="py-2.5 px-3">Filial / Caixa</th>
                   <th className="py-2.5 px-3">Abertura</th>
                   <th className="py-2.5 px-3">Fundo Inicial</th>
-                  <th className="py-2.5 px-3">Contado na Gaveta</th>
+                  <th className="py-2.5 px-3">Esperado</th>
+                  <th className="py-2.5 px-3">Contado</th>
                   <th className="py-2.5 px-3 text-right">Diferença</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 text-slate-200">
-                {shifts.map((s) => (
-                  <tr key={s.id} className="hover:bg-slate-800/30">
-                    <td className="py-2.5 px-3 font-mono font-bold text-amber-400">#{s.id}</td>
-                    <td className="py-2.5 px-3 text-slate-400">{formatDate(s.opened_at)}</td>
-                    <td className="py-2.5 px-3 font-mono">{formatCurrency(s.initial_amount)}</td>
-                    <td className="py-2.5 px-3 font-mono text-white">
-                      {s.final_amount !== null ? formatCurrency(s.final_amount) : 'Em aberto'}
-                    </td>
-                    <td className="py-2.5 px-3 text-right font-mono font-bold">
-                      {s.difference !== null ? (
-                        <span className={s.difference >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
-                          {s.difference >= 0 ? '+' : ''}
-                          {formatCurrency(s.difference)}
-                        </span>
-                      ) : (
-                        <span className="text-amber-400 font-normal">Aberto</span>
-                      )}
+                {shifts.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-slate-500">
+                      Nenhum turno registrado para a seleção atual.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  shifts.map((s: any) => (
+                    <tr key={s.id} className="hover:bg-slate-800/30">
+                      <td className="py-2.5 px-3 font-mono font-bold text-amber-400">#{s.id}</td>
+                      <td className="py-2.5 px-3 text-[11px] text-amber-300">
+                        {s.branch?.name || 'Geral'} {s.cash_desk?.name ? `• ${s.cash_desk?.name}` : ''}
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-400">{formatDate(s.opened_at)}</td>
+                      <td className="py-2.5 px-3 font-mono">{formatCurrency(s.initial_amount)}</td>
+                      <td className="py-2.5 px-3 font-mono text-slate-300">
+                        {s.system_amount !== null ? formatCurrency(s.system_amount) : '-'}
+                      </td>
+                      <td className="py-2.5 px-3 font-mono text-white">
+                        {s.final_amount !== null ? formatCurrency(s.final_amount) : 'Em aberto'}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono font-bold">
+                        {s.difference !== null ? (
+                          <span className={s.difference >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                            {s.difference >= 0 ? '+' : ''}
+                            {formatCurrency(s.difference)}
+                          </span>
+                        ) : (
+                          <span className="text-amber-400 font-normal">Aberto</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </div>
 
-        {/* Histórico de Sangrias e Suprimentos */}
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 space-y-4">
+        {/* Histórico de Sangrias e Suprimentos (5 colunas) */}
+        <div className="lg:col-span-5 rounded-2xl border border-slate-800 bg-slate-900/60 p-6 space-y-4">
           <div className="flex items-center justify-between">
             <h4 className="text-base font-bold text-white">Sangrias e Suprimentos</h4>
             <span className="text-xs text-slate-400 font-medium">Movimentações Avulsas</span>
           </div>
 
-          <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+          <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
             {transactions.length === 0 ? (
               <div className="py-12 text-center text-xs text-slate-500">
-                Nenhuma sangria ou suprimento registrado.
+                Nenhuma sangria ou suprimento registrado para a filial ativa.
               </div>
             ) : (
               transactions.map((t) => (

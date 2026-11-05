@@ -12,31 +12,71 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading) return
 
-    // Se estiver na tela de login, não bloqueia
+    // Tela de login é pública
     if (pathname === '/login') return
 
-    if (!user || (profile && 'tenant_id' in profile && profile.tenant_id === null)) {
+    // Se não há usuário ou perfil com role válido, redireciona para login
+    if (!user || !profile?.role) {
       router.replace('/login')
       return
     }
 
-    // Se o usuário for operador de caixa, só pode acessar o PDV
-    if (profile?.role === 'operator') {
-      if (pathname !== '/pdv') {
+    const isCashier = profile.role === 'cashier_operator' || profile.role === 'operator'
+
+    // Operador de caixa só pode acessar PDV e Caixa
+    if (isCashier) {
+      if (pathname !== '/pdv' && pathname !== '/caixa') {
         router.replace('/pdv')
+        return
       }
+    }
+
+    // Gerente de filial ou regional não pode acessar Redes
+    if ((profile.role === 'branch_admin' || profile.role === 'unit_admin') && pathname === '/redes') {
+      router.replace('/')
+      return
     }
   }, [user, profile, loading, pathname, router])
 
-  if (!loading && pathname !== '/login' && (!user || (profile && 'tenant_id' in profile && profile.tenant_id === null))) {
-    return <div className="flex h-64 items-center justify-center text-xs text-slate-500">Redirecionando para o login...</div>
+  if (pathname === '/login') {
+    return <>{children}</>
   }
 
-  // Se for operador e estiver tentando renderizar outra página enquanto redireciona, mostra loading discreto
-  if (!loading && profile?.role === 'operator' && pathname !== '/pdv' && pathname !== '/login') {
+  // Deny-by-default: enquanto carrega ou se não houver usuário/perfil válido
+  if (loading || !user || !profile?.role) {
     return (
-      <div className="flex h-64 items-center justify-center text-xs text-slate-500 font-medium">
-        Redirecionando para Frente de Caixa (PDV)...
+      <div className="flex h-screen w-full items-center justify-center bg-slate-900 text-slate-400">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+          <p className="text-sm font-medium">
+            {loading ? 'Validando sessão e permissões...' : 'Acesso não autorizado. Redirecionando...'}
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  const isCashier = profile.role === 'cashier_operator' || profile.role === 'operator'
+  const isBranchOrUnit = profile.role === 'branch_admin' || profile.role === 'unit_admin'
+
+  // Bloqueio de renderização para operador fora do escopo permitido
+  if (isCashier && pathname !== '/pdv' && pathname !== '/caixa') {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-slate-900 text-slate-400">
+        <div className="flex flex-col items-center gap-2">
+          <p className="text-sm font-medium text-emerald-400">Acesso Restrito: Redirecionando para o PDV...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Bloqueio de renderização para gestor de filial em redes
+  if (isBranchOrUnit && pathname === '/redes') {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-slate-900 text-slate-400">
+        <div className="flex flex-col items-center gap-2">
+          <p className="text-sm font-medium text-amber-400">Acesso Restrito: Redirecionando para o Início...</p>
+        </div>
       </div>
     )
   }

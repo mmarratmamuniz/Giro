@@ -60,15 +60,15 @@ const NetworkContext = createContext<NetworkContextType>({
 
 export function NetworkProvider({ children }: { children: React.ReactNode }) {
   const { profile } = useAuth()
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
 
   const [networks, setNetworks] = useState<Network[]>([])
   const [units, setUnits] = useState<Unit[]>([])
   const [branches, setBranches] = useState<Branch[]>([])
 
-  const [selectedNetworkId, setSelectedNetworkId] = useState<string | 'ALL'>('ALL')
-  const [selectedUnitId, setSelectedUnitId] = useState<string | 'ALL'>('ALL')
-  const [selectedBranchId, setSelectedBranchId] = useState<string | 'ALL'>('ALL')
+  const [selectedNetworkId, setSelectedNetworkIdState] = useState<string | 'ALL'>('ALL')
+  const [selectedUnitId, setSelectedUnitIdState] = useState<string | 'ALL'>('ALL')
+  const [selectedBranchId, setSelectedBranchIdState] = useState<string | 'ALL'>('ALL')
   const [loadingStructure, setLoadingStructure] = useState(true)
 
   async function reloadStructure() {
@@ -90,25 +90,77 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  // Dispara reloadStructure reagindo a profile?.id e reseta quando !profile
   useEffect(() => {
-    reloadStructure()
-  }, [])
-
-  // Definir contexto inicial com base no papel do usuário
-  useEffect(() => {
-    if (!profile) return
-
-    if (profile.role === 'network_admin' && profile.network_id) {
-      setSelectedNetworkId(profile.network_id)
-    } else if (profile.role === 'unit_admin' && profile.unit_id) {
-      setSelectedUnitId(profile.unit_id)
-      if (profile.network_id) setSelectedNetworkId(profile.network_id)
-    } else if ((profile.role === 'branch_admin' || profile.role === 'cashier_operator') && profile.branch_id) {
-      setSelectedBranchId(profile.branch_id)
-      if (profile.unit_id) setSelectedUnitId(profile.unit_id)
-      if (profile.network_id) setSelectedNetworkId(profile.network_id)
+    if (!profile) {
+      setNetworks([])
+      setUnits([])
+      setBranches([])
+      setSelectedNetworkIdState('ALL')
+      setSelectedUnitIdState('ALL')
+      setSelectedBranchIdState('ALL')
+      setLoadingStructure(false)
+      return
     }
-  }, [profile])
+
+    reloadStructure()
+
+    // Configuração dos escopos obrigatórios de acordo com o cargo
+    if (profile.role !== 'super_admin' && profile.network_id) {
+      setSelectedNetworkIdState(profile.network_id)
+    } else if (profile.role === 'super_admin') {
+      setSelectedNetworkIdState('ALL')
+    }
+
+    if (profile.role === 'unit_admin' && profile.unit_id) {
+      setSelectedUnitIdState(profile.unit_id)
+    } else if ((profile.role === 'branch_admin' || profile.role === 'cashier_operator' || profile.role === 'operator') && profile.unit_id) {
+      setSelectedUnitIdState(profile.unit_id)
+    } else {
+      setSelectedUnitIdState('ALL')
+    }
+
+    if ((profile.role === 'branch_admin' || profile.role === 'cashier_operator' || profile.role === 'operator') && profile.branch_id) {
+      setSelectedBranchIdState(profile.branch_id)
+    } else {
+      setSelectedBranchIdState('ALL')
+    }
+  }, [profile?.id, profile?.role, profile?.network_id, profile?.unit_id, profile?.branch_id])
+
+  // Setters protegidos contra quebra de escopo
+  const setSelectedNetworkId = (id: string | 'ALL') => {
+    if (profile && profile.role !== 'super_admin') {
+      if (profile.network_id) {
+        setSelectedNetworkIdState(profile.network_id)
+        return
+      }
+    }
+    setSelectedNetworkIdState(id)
+  }
+
+  const setSelectedUnitId = (id: string | 'ALL') => {
+    if (profile && profile.role === 'unit_admin' && profile.unit_id) {
+      setSelectedUnitIdState(profile.unit_id)
+      return
+    }
+    if (profile && (profile.role === 'branch_admin' || profile.role === 'cashier_operator' || profile.role === 'operator') && profile.unit_id) {
+      setSelectedUnitIdState(profile.unit_id)
+      return
+    }
+    setSelectedUnitIdState(id)
+  }
+
+  const setSelectedBranchId = (id: string | 'ALL') => {
+    if (
+      profile &&
+      profile.branch_id &&
+      (profile.role === 'branch_admin' || profile.role === 'cashier_operator' || profile.role === 'operator')
+    ) {
+      setSelectedBranchIdState(profile.branch_id)
+      return
+    }
+    setSelectedBranchIdState(id)
+  }
 
   return (
     <NetworkContext.Provider

@@ -1,12 +1,13 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/contexts/auth-context'
 import { useFeedback } from '@/contexts/feedback-context'
 import { formatCurrency } from '@/lib/utils'
 import { CashShift } from '@/types/cash'
-import { DollarSign, ArrowDownRight, ArrowUpRight, Lock, Unlock, X } from 'lucide-react'
+import { useNetwork } from '@/contexts/network-context'
+import { DollarSign, ArrowDownRight, ArrowUpRight, Lock, Unlock, X, Store, Computer } from 'lucide-react'
 
 interface CashShiftModalProps {
   currentShift: CashShift | null
@@ -21,15 +22,59 @@ export function CashShiftModal({
   onClose,
   onSuccess,
 }: CashShiftModalProps) {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const { showSuccess, showError, showWarning, openDialog } = useFeedback()
-  const [modalType, setModalType] = useState<'open' | 'close' | 'sangria' | 'suprimento'>(
-    currentShift ? 'sangria' : 'open'
-  )
+  const { branches, networks, selectedBranchId, selectedNetworkId } = useNetwork()
+  const [modalType, setModalType] = useState<'open' | 'close' | 'sangria' | 'suprimento'>('open')
   const [amount, setAmount] = useState<string>('')
   const [reason, setReason] = useState<string>('')
   const [loading, setLoading] = useState(false)
-  const supabase = createClient()
+  const [selectedBranch, setSelectedBranch] = useState(
+    profile?.branch_id || (selectedBranchId !== 'ALL' ? selectedBranchId : branches[0]?.id || '')
+  )
+  const [cashDesks, setCashDesks] = useState<any[]>([])
+  const [selectedDeskId, setSelectedDeskId] = useState<string>('')
+  const [supabase] = useState(() => createClient())
+
+  // Sincroniza modalType e limpa campos sempre que abrir ou mudar o turno atual
+  useEffect(() => {
+    if (isOpen) {
+      setModalType(currentShift ? 'sangria' : 'open')
+      setAmount('')
+      setReason('')
+    }
+  }, [isOpen, currentShift])
+
+  // Ajusta filial respeitando trava de operador
+  useEffect(() => {
+    if (profile?.branch_id) {
+      setSelectedBranch(profile.branch_id)
+    } else if (selectedBranchId !== 'ALL') {
+      setSelectedBranch(selectedBranchId)
+    } else if (branches.length > 0 && !selectedBranch) {
+      setSelectedBranch(branches[0].id)
+    }
+  }, [profile?.branch_id, selectedBranchId, branches])
+
+  // Busca terminais de caixa da filial selecionada
+  useEffect(() => {
+    async function fetchDesks() {
+      if (!selectedBranch) return
+      const { data } = await supabase
+        .from('cash_desks')
+        .select('*')
+        .eq('branch_id', selectedBranch)
+        .order('name')
+      if (data && data.length > 0) {
+        setCashDesks(data)
+        setSelectedDeskId(data[0].id)
+      } else {
+        setCashDesks([])
+        setSelectedDeskId('')
+      }
+    }
+    fetchDesks()
+  }, [selectedBranch, supabase])
 
   if (!isOpen) return null
 
@@ -39,11 +84,35 @@ export function CashShiftModal({
     try {
       setLoading(true)
       const initial = parseFloat(amount) || 0
-      const { data, error } = await supabase
+      const targetBranchId =
+        profile?.branch_id || selectedBranch || (selectedBranchId !== 'ALL' ? selectedBranchId : branches[0]?.id || null)
+
+      if (!targetBranchId) {
+        showWarning('Filial Obrigatória', 'Selecione uma filial para abrir o turno de caixa.')
+        setLoading(false)
+        return
+      }
+
+      if (!selectedDeskId) {
+        showWarning('Terminal Obrigatório', 'Selecione um terminal de caixa (cash_desk) para abrir o turno.')
+        setLoading(false)
+        return
+      }
+
+      const branchObj = branches.find((b) => b.id === targetBranchId)
+      const targetNetId =
+        branchObj?.network_id ||
+        profile?.network_id ||
+        (selectedNetworkId !== 'ALL' ? selectedNetworkId : networks[0]?.id || null)
+
+      const { error } = await supabase
         .from('cash_shifts')
         .insert([
           {
             user_id: user?.id || null,
+            branch_id: targetBranchId,
+            cash_desk_id: selectedDeskId,
+            network_id: targetNetId,
             initial_amount: initial,
             status: 'OPEN',
             notes: reason || 'Abertura normal de turno',
@@ -52,18 +121,29 @@ export function CashShiftModal({
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {
+        if (error.code === '23505' || error.message?.includes('cash_shifts_one_open_per_desk_idx')) {
+          showError('Terminal Já Ocupado', 'Este terminal de caixa já possui um turno em aberto. Feche o turno ativo antes de iniciar outro.')
+          return
+        }
+        throw error
+      }
+
       showSuccess('Caixa Aberto!', `Turno liberado com fundo de troco de ${formatCurrency(initial)}`)
       onSuccess()
       onClose()
     } catch (err: any) {
-      showError('Erro ao abrir caixa', err.message)
+      if (err.code === '23505' || err.message?.includes('cash_shifts_one_open_per_desk_idx')) {
+        showError('Terminal Já Ocupado', 'Este terminal de caixa já possui um turno em aberto.')
+      } else {
+        showError('Erro ao abrir caixa', err.message)
+      }
     } finally {
       setLoading(false)
     }
   }
 
-  // Sangria / Suprimento
+  // Sangria / Suprimento via RPC auditada
   const handleTransaction = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!currentShift) return
@@ -71,23 +151,32 @@ export function CashShiftModal({
     try {
       setLoading(true)
       const val = parseFloat(amount) || 0
-      if (val <= 0) return showWarning('Valor Inválido', 'Informe um valor maior que zero.')
+      if (val <= 0) {
+        showWarning('Valor Inválido', 'Informe um valor maior que zero.')
+        setLoading(false)
+        return
+      }
 
-      const type = modalType === 'sangria' ? 'SANGRIA' : 'SUPRIMENTO'
+      const txReason = reason.trim() || (modalType === 'sangria' ? 'Retirada de caixa' : 'Reforço de troco')
+      if (txReason.length < 3) {
+        showWarning('Motivo Obrigatório', 'Informe um motivo com pelo menos 3 caracteres.')
+        setLoading(false)
+        return
+      }
 
-      const { error } = await supabase.from('cash_transactions').insert([
-        {
-          shift_id: currentShift.id,
-          user_id: user?.id || null,
-          type,
-          amount: val,
-          reason: reason || (type === 'SANGRIA' ? 'Retirada de caixa' : 'Reforço de troco'),
-        },
-      ])
+      const txType = modalType === 'sangria' ? 'SANGRIA' : 'SUPRIMENTO'
+
+      const { error } = await supabase.rpc('register_cash_transaction', {
+        p_shift_id: currentShift.id,
+        p_type: txType,
+        p_amount: val,
+        p_reason: txReason,
+      })
 
       if (error) throw error
+
       showSuccess(
-        `${type === 'SANGRIA' ? 'Sangria' : 'Suprimento'} Registrado!`,
+        `${txType === 'SANGRIA' ? 'Sangria' : 'Suprimento'} Registrado!`,
         `${formatCurrency(val)} movimentado com sucesso.`
       )
       onSuccess()
@@ -99,57 +188,28 @@ export function CashShiftModal({
     }
   }
 
-  // Fechamento de Caixa
+  // Fechamento de Caixa via RPC
   const handleCloseShift = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!currentShift) return
 
     try {
       setLoading(true)
-      const finalCounted = parseFloat(amount) || 0
+      const finalVal = parseFloat(amount) || 0
 
-      // Calcular total de vendas em dinheiro do turno
-      const { data: cashSales } = await supabase
-        .from('sales')
-        .select('total_amount')
-        .eq('shift_id', currentShift.id)
-        .eq('payment_method', 'Dinheiro')
-        .eq('status', 'COMPLETED')
-
-      const totalCashSales = (cashSales || []).reduce((sum, s: any) => sum + Number(s.total_amount), 0)
-
-      // Calcular sangrias e suprimentos
-      const { data: trans } = await supabase
-        .from('cash_transactions')
-        .select('type, amount')
-        .eq('shift_id', currentShift.id)
-
-      let totalSuprimento = 0
-      let totalSangria = 0
-      ;(trans || []).forEach((t: any) => {
-        if (t.type === 'SUPRIMENTO') totalSuprimento += Number(t.amount)
-        if (t.type === 'SANGRIA') totalSangria += Number(t.amount)
+      const { data, error } = await supabase.rpc('close_cash_shift', {
+        p_shift_id: currentShift.id,
+        p_final_amount: finalVal,
+        p_notes: reason.trim() || null,
       })
-
-      // Saldo teórico da gaveta = Fundo Inicial + Vendas Dinheiro + Suprimentos - Sangrias
-      const systemAmount = currentShift.initial_amount + totalCashSales + totalSuprimento - totalSangria
-      const difference = finalCounted - systemAmount
-
-      const { error } = await supabase
-        .from('cash_shifts')
-        .update({
-          closed_at: new Date().toISOString(),
-          final_amount: finalCounted,
-          system_amount: systemAmount,
-          difference: difference,
-          status: 'CLOSED',
-          notes: reason || 'Fechamento de turno',
-        })
-        .eq('id', currentShift.id)
 
       if (error) throw error
 
-      // Modal de Resumo Elegante no Padrão do Sistema
+      const res = data as any
+      const systemAmount = res?.system_amount ?? 0
+      const difference = res?.difference ?? (finalVal - systemAmount)
+
+      // Modal de Resumo Elegante
       openDialog({
         title: 'Caixa Fechado com Sucesso!',
         type: difference < 0 ? 'warning' : 'success',
@@ -162,7 +222,7 @@ export function CashShiftModal({
             </div>
             <div className="flex justify-between text-xs text-slate-300">
               <span>Contado na Gaveta:</span>
-              <span className="font-mono font-bold text-white">{formatCurrency(finalCounted)}</span>
+              <span className="font-mono font-bold text-white">{formatCurrency(finalVal)}</span>
             </div>
             <div className="flex justify-between text-xs pt-2 border-t border-slate-800 font-bold">
               <span>Diferença ({difference >= 0 ? 'Sobra / Bateu' : 'Falta'}):</span>
@@ -209,6 +269,7 @@ export function CashShiftModal({
         {currentShift && (
           <div className="flex rounded-xl bg-slate-950 p-1 my-4 border border-slate-800">
             <button
+              type="button"
               onClick={() => setModalType('sangria')}
               className={`flex-1 rounded-lg py-2 text-xs font-bold transition ${
                 modalType === 'sangria' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'text-slate-400'
@@ -217,6 +278,7 @@ export function CashShiftModal({
               Sangria (-)
             </button>
             <button
+              type="button"
               onClick={() => setModalType('suprimento')}
               className={`flex-1 rounded-lg py-2 text-xs font-bold transition ${
                 modalType === 'suprimento' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400'
@@ -225,6 +287,7 @@ export function CashShiftModal({
               Suprimento (+)
             </button>
             <button
+              type="button"
               onClick={() => setModalType('close')}
               className={`flex-1 rounded-lg py-2 text-xs font-bold transition ${
                 modalType === 'close' ? 'bg-amber-500 text-slate-950' : 'text-slate-400'
@@ -238,11 +301,54 @@ export function CashShiftModal({
         {/* Formulário de Abertura */}
         {!currentShift ? (
           <form onSubmit={handleOpenShift} className="mt-4 space-y-4">
+            {branches.length > 0 && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-400 flex items-center gap-1">
+                    <Store size={12} className="text-amber-400" /> Filial / Loja
+                  </label>
+                  <select
+                    disabled={!!profile?.branch_id}
+                    value={selectedBranch}
+                    onChange={(e) => setSelectedBranch(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none disabled:opacity-60 cursor-pointer"
+                  >
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-400 flex items-center gap-1">
+                    <Computer size={12} className="text-amber-400" /> Terminal / Caixa <span className="text-rose-400">*</span>
+                  </label>
+                  <select
+                    required
+                    value={selectedDeskId}
+                    onChange={(e) => setSelectedDeskId(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none cursor-pointer"
+                  >
+                    {cashDesks.length === 0 ? (
+                      <option value="">Nenhum Caixa Ativo</option>
+                    ) : (
+                      cashDesks.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+              </div>
+            )}
             <div>
               <label className="text-xs font-semibold text-slate-400">Valor do Fundo de Troco (R$)</label>
               <input
                 type="number"
                 step="0.01"
+                min="0"
                 required
                 placeholder="Ex: 100,00"
                 value={amount}
@@ -262,8 +368,8 @@ export function CashShiftModal({
             </div>
             <button
               type="submit"
-              disabled={loading}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3 text-xs font-extrabold text-slate-950 hover:bg-emerald-400 transition"
+              disabled={loading || !selectedDeskId}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3 text-xs font-extrabold text-slate-950 hover:bg-emerald-400 disabled:opacity-50 transition cursor-pointer"
             >
               <Unlock size={16} /> {loading ? 'Abrindo...' : 'Abrir Caixa Agora'}
             </button>
@@ -286,6 +392,7 @@ export function CashShiftModal({
               <input
                 type="number"
                 step="0.01"
+                min="0"
                 required
                 placeholder="0,00"
                 value={amount}
@@ -306,7 +413,7 @@ export function CashShiftModal({
             <button
               type="submit"
               disabled={loading}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 py-3 text-xs font-extrabold text-slate-950 hover:bg-amber-400 transition"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 py-3 text-xs font-extrabold text-slate-950 hover:bg-amber-400 disabled:opacity-50 transition cursor-pointer"
             >
               <Lock size={16} /> {loading ? 'Fechando...' : 'Finalizar e Fechar Turno'}
             </button>
@@ -321,6 +428,7 @@ export function CashShiftModal({
               <input
                 type="number"
                 step="0.01"
+                min="0.01"
                 required
                 placeholder="0,00"
                 value={amount}
@@ -342,7 +450,7 @@ export function CashShiftModal({
             <button
               type="submit"
               disabled={loading}
-              className={`flex w-full items-center justify-center gap-2 rounded-xl py-3 text-xs font-extrabold text-slate-950 transition ${
+              className={`flex w-full items-center justify-center gap-2 rounded-xl py-3 text-xs font-extrabold text-slate-950 transition cursor-pointer disabled:opacity-50 ${
                 modalType === 'sangria' ? 'bg-rose-400 hover:bg-rose-300' : 'bg-emerald-400 hover:bg-emerald-300'
               }`}
             >

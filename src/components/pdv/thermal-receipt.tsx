@@ -21,6 +21,9 @@ interface ThermalReceiptProps {
   cashGiven?: number
   changeDue?: number
   onClose?: () => void
+  branchName?: string
+  cashDeskName?: string
+  operatorName?: string
 }
 
 export function ThermalReceipt({
@@ -34,12 +37,15 @@ export function ThermalReceipt({
   cashGiven,
   changeDue = 0,
   onClose,
+  branchName,
+  cashDeskName,
+  operatorName,
 }: ThermalReceiptProps) {
   const handlePrint = () => {
     window.print()
   }
 
-  const subtotal = grossAmount || items.reduce((sum, it) => sum + it.quantity * it.unit_price, 0)
+  const subtotal = grossAmount ?? items.reduce((sum, it) => sum + it.quantity * it.unit_price, 0)
 
   return (
     <div className="flex flex-col items-center">
@@ -49,7 +55,12 @@ export function ThermalReceipt({
         <div className="text-center border-b border-dashed border-black pb-3 mb-2">
           <h2 className="text-sm font-black tracking-tighter uppercase">GIRO SISTEMA</h2>
           <p className="text-[10px]">Gestão Comercial e Controle de Vendas</p>
-          <p className="text-[10px]">CUPOM NÃO FISCAL</p>
+          <div className="text-[10px] font-bold uppercase text-neutral-900 mt-1 space-y-0.5">
+            <p>LOJA: {branchName || 'Matriz / Loja Padrão'}</p>
+            {cashDeskName && <p>TERMINAL: {cashDeskName}</p>}
+            {operatorName && <p className="text-[9px] font-normal text-neutral-700">OPERADOR: {operatorName}</p>}
+          </div>
+          <p className="text-[9px] text-neutral-600 mt-1">CUPOM NÃO FISCAL</p>
           <div className="mt-2 text-[10px] flex justify-between">
             <span>VENDA: #{saleId}</span>
             <span>{formatDate(date)}</span>
@@ -95,7 +106,7 @@ export function ThermalReceipt({
             <span>FORMA PAGTO:</span>
             <span className="font-bold uppercase">{paymentMethod}</span>
           </div>
-          {paymentMethod === 'Dinheiro' && cashGiven && (
+          {paymentMethod === 'Dinheiro' && typeof cashGiven === 'number' && cashGiven > 0 && (
             <>
               <div className="flex justify-between text-[10px]">
                 <span>VALOR RECEBIDO:</span>
@@ -120,14 +131,14 @@ export function ThermalReceipt({
       <div className="flex gap-2 w-full mt-4 print:hidden">
         <button
           onClick={handlePrint}
-          className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-amber-500 py-3 text-xs font-extrabold text-slate-950 hover:bg-amber-400 shadow-md shadow-amber-500/20 transition"
+          className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-amber-500 py-3 text-xs font-extrabold text-slate-950 hover:bg-amber-400 shadow-md shadow-amber-500/20 transition cursor-pointer"
         >
           <Printer size={15} /> Imprimir Cupom Térmico
         </button>
         {onClose && (
           <button
             onClick={onClose}
-            className="rounded-xl bg-slate-800 px-4 py-3 text-xs font-bold text-slate-200 hover:bg-slate-700 transition"
+            className="rounded-xl bg-slate-800 px-4 py-3 text-xs font-bold text-slate-200 hover:bg-slate-700 transition cursor-pointer"
           >
             Fechar
           </button>
