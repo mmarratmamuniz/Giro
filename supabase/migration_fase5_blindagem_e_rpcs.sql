@@ -255,6 +255,36 @@ USING (
     )
 );
 
+-- 3.5. Atualização de profiles_select_policy com suporte a unit_admin
+DROP POLICY IF EXISTS "profiles_select_policy" ON public.profiles;
+CREATE POLICY "profiles_select_policy" ON public.profiles
+FOR SELECT TO authenticated
+USING (
+    id = (SELECT auth.uid())
+    OR public.current_user_role() = 'super_admin'
+    OR (
+        public.current_user_role() = 'network_admin'
+        AND network_id = public.current_user_network_id()
+        AND role <> 'super_admin'
+    )
+    OR (
+        public.current_user_role() = 'unit_admin'
+        AND network_id = public.current_user_network_id()
+        AND (
+            unit_id = public.current_user_unit_id()
+            OR branch_id IN (
+                SELECT b.id FROM public.branches b WHERE b.unit_id = public.current_user_unit_id()
+            )
+        )
+        AND role IN ('unit_admin', 'branch_admin', 'cashier_operator', 'operator')
+    )
+    OR (
+        public.current_user_role() = 'branch_admin'
+        AND branch_id = public.current_user_branch_id()
+        AND role IN ('branch_admin', 'cashier_operator', 'operator')
+    )
+);
+
 -- =========================================================================
 -- 4. RPCS TRANSACIONAIS E AUDITÁVEIS
 -- =========================================================================
@@ -1033,18 +1063,42 @@ BEGIN
         -- Forçar a rede do usuário para a rede do administrador
         v_target_net := v_caller_net;
 
-        IF v_caller_role = 'unit_admin' THEN
+        IF v_caller_role = 'network_admin' THEN
+            IF p_network_id IS NOT NULL AND p_network_id <> v_caller_net THEN
+                RAISE EXCEPTION 'Permissão negada: Administrador de rede só pode vincular usuários à sua própria rede.';
+            END IF;
+        ELSIF v_caller_role = 'unit_admin' THEN
+            IF p_unit_id IS NOT NULL AND p_unit_id <> v_caller_unit THEN
+                RAISE EXCEPTION 'Permissão negada: Administrador de unidade só pode vincular usuários à sua própria unidade regional.';
+            END IF;
+            IF p_branch_id IS NOT NULL AND NOT EXISTS (
+                SELECT 1 FROM public.branches b WHERE b.id = p_branch_id AND b.unit_id = v_caller_unit
+            ) THEN
+                RAISE EXCEPTION 'Permissão negada: A filial selecionada não pertence à sua unidade regional.';
+            END IF;
             v_target_unit := v_caller_unit;
             IF v_target_role NOT IN ('branch_admin', 'cashier_operator', 'operator') THEN
                 RAISE EXCEPTION 'Permissão negada: Administrador de unidade só pode atribuir cargos branch_admin ou cashier_operator.';
             END IF;
         ELSIF v_caller_role = 'branch_admin' THEN
+            IF p_branch_id IS NOT NULL AND p_branch_id <> v_caller_branch THEN
+                RAISE EXCEPTION 'Permissão negada: Administrador de filial só pode vincular usuários à sua própria filial.';
+            END IF;
             v_target_unit := v_caller_unit;
             v_target_branch := v_caller_branch;
             IF v_target_role NOT IN ('branch_admin', 'cashier_operator', 'operator') THEN
                 RAISE EXCEPTION 'Permissão negada: Administrador de filial só pode atribuir cargos branch_admin ou cashier_operator.';
             END IF;
         END IF;
+    END IF;
+
+    -- Preenchimento automático de unidade e rede com base na filial escolhida
+    IF v_target_branch IS NOT NULL THEN
+        SELECT b.unit_id, b.network_id INTO v_target_unit, v_target_net
+        FROM public.branches b WHERE b.id = v_target_branch;
+    ELSIF v_target_unit IS NOT NULL THEN
+        SELECT u.network_id INTO v_target_net
+        FROM public.units u WHERE u.id = v_target_unit;
     END IF;
 
     -- Confirmação imediata do e-mail do usuário recém-criado em auth.users
@@ -1125,12 +1179,23 @@ BEGIN
             RAISE EXCEPTION 'Permissão negada: Usuário pertence a outra rede.';
         END IF;
     ELSIF v_caller_role = 'unit_admin' THEN
-        IF v_target_profile.network_id IS DISTINCT FROM v_caller_net OR v_target_profile.unit_id IS DISTINCT FROM v_caller_unit THEN
+        IF v_target_profile.network_id IS DISTINCT FROM v_caller_net THEN
+            RAISE EXCEPTION 'Permissão negada: Usuário pertence a outra rede.';
+        END IF;
+        IF v_target_profile.role IN ('super_admin', 'network_admin', 'unit_admin') THEN
+            RAISE EXCEPTION 'Permissão negada: Administrador de unidade só pode excluir operadores ou gerentes de filiais de sua regional.';
+        END IF;
+        IF v_target_profile.unit_id IS DISTINCT FROM v_caller_unit AND NOT EXISTS (
+            SELECT 1 FROM public.branches b WHERE b.id = v_target_profile.branch_id AND b.unit_id = v_caller_unit
+        ) THEN
             RAISE EXCEPTION 'Permissão negada: Usuário pertence a outra unidade regional.';
         END IF;
     ELSIF v_caller_role = 'branch_admin' THEN
         IF v_target_profile.network_id IS DISTINCT FROM v_caller_net OR v_target_profile.branch_id IS DISTINCT FROM v_caller_branch THEN
             RAISE EXCEPTION 'Permissão negada: Usuário pertence a outra filial.';
+        END IF;
+        IF v_target_profile.role IN ('super_admin', 'network_admin', 'unit_admin') THEN
+            RAISE EXCEPTION 'Permissão negada: Gerente de filial só pode excluir usuários de sua própria filial.';
         END IF;
     END IF;
 

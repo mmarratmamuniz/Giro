@@ -1,7 +1,6 @@
 {
   "name": "giro",
   "version": "1.0.0",
-
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -29,6 +28,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
+    "puppeteer-core": "^25.16.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

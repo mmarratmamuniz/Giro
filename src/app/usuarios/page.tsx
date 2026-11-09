@@ -114,11 +114,18 @@ export default function UsuariosPage() {
     }
   }, [networks, selectedNetworkId])
 
-  // Filtrar unidades pela rede selecionada
-  const availableUnits = units.filter((u) => u.network_id === selectedNetworkId)
+  const isSuperAdminUser = currentProfile?.role === 'super_admin'
+  const isNetworkAdmin = currentProfile?.role === 'network_admin'
+  const isUnitAdmin = currentProfile?.role === 'unit_admin'
+  const isBranchAdmin = currentProfile?.role === 'branch_admin'
 
-  // Filtrar filiais pela unidade selecionada
-  const availableBranches = branches.filter((b) => b.unit_id === selectedUnitId)
+  // Filtrar unidades pela rede selecionada / travada
+  const activeNetworkId = isSuperAdminUser ? selectedNetworkId : (currentProfile?.network_id || selectedNetworkId)
+  const availableUnits = units.filter((u) => u.network_id === activeNetworkId)
+
+  // Filtrar filiais pela unidade selecionada / travada
+  const activeUnitId = isUnitAdmin ? currentProfile?.unit_id : selectedUnitId
+  const availableBranches = branches.filter((b) => b.unit_id === activeUnitId)
 
   // Abrir modal configurando escopo do usuário logado
   const handleOpenCreateModal = () => {
@@ -162,20 +169,23 @@ export default function UsuariosPage() {
 
       // Trava estrita de segurança pelo perfil de quem está criando
       if (currentProfile?.role === 'branch_admin') {
-        targetRole = 'cashier_operator'
+        if (targetRole !== 'branch_admin' && targetRole !== 'cashier_operator') {
+          targetRole = 'cashier_operator'
+        }
         brId = currentProfile.branch_id || null
         unId = currentProfile.unit_id || null
         netId = currentProfile.network_id || null
       } else if (currentProfile?.role === 'unit_admin') {
-        unId = currentProfile.unit_id || null
-        netId = currentProfile.network_id || null
         if (targetRole !== 'branch_admin' && targetRole !== 'cashier_operator') {
           targetRole = 'cashier_operator'
         }
+        unId = currentProfile.unit_id || null
+        netId = currentProfile.network_id || null
+        // brId vem da filial selecionada pertencente à unidade
       } else if (currentProfile?.role === 'network_admin') {
         netId = currentProfile.network_id || null
-        if (targetRole === 'super_admin' || targetRole === 'network_admin') {
-          targetRole = 'branch_admin'
+        if (targetRole === 'super_admin') {
+          throw new Error('Administrador de rede não possui permissão para atribuir o cargo super_admin.')
         }
       }
 
@@ -271,10 +281,6 @@ export default function UsuariosPage() {
       setDeleting(false)
     }
   }
-
-  const isSuperAdminUser = currentProfile?.role === 'super_admin'
-  const isNetworkAdmin = currentProfile?.role === 'network_admin'
-  const isBranchAdmin = currentProfile?.role === 'branch_admin'
 
   const renderRoleBadge = (r: string) => {
     switch (r) {
@@ -484,56 +490,98 @@ export default function UsuariosPage() {
               </div>
 
               {/* Seletor de Cargo */}
-              {isBranchAdmin ? (
-                <div>
-                  <label className="text-xs font-semibold text-slate-400">Cargo / Nível</label>
-                  <div className="mt-1 flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white">
-                    <span className="font-bold text-blue-400">Operador de Caixa</span>
-                    <span className="text-[10px] text-slate-500">Exclusivo para frente de caixa (PDV)</span>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <label className="text-xs font-semibold text-slate-400">Nível de Acesso (Cargo)</label>
+              <div>
+                <label className="text-xs font-semibold text-slate-400">Nível de Acesso (Cargo)</label>
+                {isBranchAdmin ? (
                   <select
                     value={role}
                     onChange={(e) => setRole(e.target.value as any)}
                     className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none cursor-pointer"
                   >
-                    <option value="cashier_operator">Operador de Caixa (Exclusivo PDV / Caixa da Filial)</option>
-                    <option value="branch_admin">Administrador da Filial (Gerente da Loja)</option>
-                    {(isSuperAdminUser || isNetworkAdmin) && (
-                      <option value="unit_admin">Administrador da Unidade (Gerente do Polo / Regional)</option>
-                    )}
-                    {isSuperAdminUser && (
-                      <option value="network_admin">Administrador da Rede (Gestão de Todas as Unidades/Lojas)</option>
-                    )}
+                    <option value="cashier_operator">Operador de Caixa (Exclusivo Frente de Caixa / PDV)</option>
+                    <option value="branch_admin">Administrador da Filial (Gerente / Subgerente da Loja)</option>
                   </select>
-                </div>
-              )}
-
-              {/* Seletor de Rede (Apenas Super Admin) */}
-              {isSuperAdminUser && networks.length > 0 && (
-                <div>
-                  <label className="text-xs font-semibold text-slate-400">Rede *</label>
+                ) : isUnitAdmin ? (
                   <select
-                    value={selectedNetworkId}
-                    onChange={(e) => {
-                      setSelectedNetworkId(e.target.value)
-                      setSelectedUnitId('')
-                      setSelectedBranchId('')
-                    }}
+                    value={role}
+                    onChange={(e) => setRole(e.target.value as any)}
                     className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none cursor-pointer"
                   >
-                    {networks.map((n) => (
-                      <option key={n.id} value={n.id}>{n.name}</option>
-                    ))}
+                    <option value="cashier_operator">Operador de Caixa (Exclusivo Frente de Caixa / PDV)</option>
+                    <option value="branch_admin">Administrador da Filial (Gerente da Loja)</option>
                   </select>
+                ) : isNetworkAdmin ? (
+                  <select
+                    value={role}
+                    onChange={(e) => setRole(e.target.value as any)}
+                    className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none cursor-pointer"
+                  >
+                    <option value="cashier_operator">Operador de Caixa (Exclusivo Frente de Caixa / PDV)</option>
+                    <option value="branch_admin">Administrador da Filial (Gerente da Loja)</option>
+                    <option value="unit_admin">Administrador da Unidade (Gerente do Polo / Regional)</option>
+                    <option value="network_admin">Administrador da Rede (Gestão de Todas as Unidades/Lojas)</option>
+                  </select>
+                ) : (
+                  <select
+                    value={role}
+                    onChange={(e) => setRole(e.target.value as any)}
+                    className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none cursor-pointer"
+                  >
+                    <option value="cashier_operator">Operador de Caixa (Exclusivo Frente de Caixa / PDV)</option>
+                    <option value="branch_admin">Administrador da Filial (Gerente da Loja)</option>
+                    <option value="unit_admin">Administrador da Unidade (Gerente do Polo / Regional)</option>
+                    <option value="network_admin">Administrador da Rede (Gestão de Todas as Unidades/Lojas)</option>
+                    <option value="super_admin">Super Admin Global (Acesso Irrestrito)</option>
+                  </select>
+                )}
+              </div>
+
+              {/* Seletor de Rede (Select para Super Admin, Badge travada para demais) */}
+              {isSuperAdminUser ? (
+                networks.length > 0 && (
+                  <div>
+                    <label className="text-xs font-semibold text-slate-400">Rede *</label>
+                    <select
+                      value={selectedNetworkId}
+                      onChange={(e) => {
+                        setSelectedNetworkId(e.target.value)
+                        setSelectedUnitId('')
+                        setSelectedBranchId('')
+                      }}
+                      className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none cursor-pointer"
+                    >
+                      {networks.map((n) => (
+                        <option key={n.id} value={n.id}>{n.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )
+              ) : (
+                <div>
+                  <label className="text-xs font-semibold text-slate-400">Rede Vinculada</label>
+                  <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white">
+                    <Building2 size={14} className="text-blue-400" />
+                    <span className="font-bold text-blue-400">
+                      {networks.find((n) => n.id === (currentProfile?.network_id || selectedNetworkId))?.name || 'Sua Rede'}
+                    </span>
+                    <span className="text-[10px] text-slate-500 ml-auto font-medium">(Rede Própria)</span>
+                  </div>
                 </div>
               )}
 
-              {/* Seletor de Unidade / Regional (Não exibido para Branch Admin) */}
-              {!isBranchAdmin && (role === 'unit_admin' || role === 'branch_admin' || role === 'cashier_operator') && (
+              {/* Seletor de Unidade / Regional */}
+              {isUnitAdmin ? (
+                <div>
+                  <label className="text-xs font-semibold text-slate-400">Unidade / Regional Vinculada</label>
+                  <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-white">
+                    <MapPin size={14} className="text-indigo-400" />
+                    <span className="font-bold text-indigo-400">
+                      {units.find((u) => u.id === currentProfile?.unit_id)?.name || 'Sua Unidade Regional'}
+                    </span>
+                    <span className="text-[10px] text-slate-500 ml-auto font-medium">(Regional Própria)</span>
+                  </div>
+                </div>
+              ) : !isBranchAdmin && (role === 'unit_admin' || role === 'branch_admin' || role === 'cashier_operator') ? (
                 <div>
                   <label className="text-xs font-semibold text-slate-400">Unidade / Regional *</label>
                   <select
@@ -551,7 +599,7 @@ export default function UsuariosPage() {
                     ))}
                   </select>
                 </div>
-              )}
+              ) : null}
 
               {/* Filial / Loja */}
               {isBranchAdmin ? (
