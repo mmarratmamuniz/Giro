@@ -53,6 +53,17 @@ ADD COLUMN IF NOT EXISTS invoice_number TEXT;
 ALTER TABLE public.categories
 ADD COLUMN IF NOT EXISTS network_id UUID REFERENCES public.networks(id) ON DELETE CASCADE;
 
+-- Saneamento: Preencher network_id em cash_shifts e sales legados com base na filial
+UPDATE public.cash_shifts cs
+SET network_id = b.network_id
+FROM public.branches b
+WHERE cs.branch_id = b.id AND cs.network_id IS NULL;
+
+UPDATE public.sales s
+SET network_id = b.network_id
+FROM public.branches b
+WHERE s.branch_id = b.id AND s.network_id IS NULL;
+
 -- Saneamento: Fechar turnos duplicados legados no mesmo terminal antes de criar o índice
 -- (mantém apenas o turno mais recente como OPEN para evitar erro 23505)
 WITH ranked_open_shifts AS (
