@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { GiroLogoIcon } from '@/components/ui/giro-logo'
 import {
   Store,
   Lock,
@@ -26,23 +27,15 @@ const testProfiles = [
   },
   {
     title: 'Admin de Rede',
-    desc: 'Grupo OVO (Todas as filiais)',
+    desc: 'Grupo OVO (Todas as Unidades)',
     email: 'admin.rede@giro.com',
-    badge: 'Multi-Lojas',
+    badge: 'Multi-Unidades',
     badgeColor: 'border-blue-500/40 bg-blue-500/10 text-blue-400',
     icon: Building2,
   },
   {
-    title: 'Gerente Filial Centro',
-    desc: 'Loja Centro (Estoque e Caixa)',
-    email: 'gerente.centro@giro.com',
-    badge: 'Gestão Loja',
-    badgeColor: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400',
-    icon: Store,
-  },
-  {
     title: 'Operador Caixa Centro',
-    desc: 'Loja Centro • Terminal de Vendas',
+    desc: 'Unidade Centro • Terminal de Vendas',
     email: 'caixa.centro@giro.com',
     badge: 'Apenas PDV',
     badgeColor: 'border-purple-500/40 bg-purple-500/10 text-purple-400',
@@ -50,7 +43,7 @@ const testProfiles = [
   },
   {
     title: 'Operador Caixa Praia',
-    desc: 'Filial Praia • Terminal de Vendas',
+    desc: 'Unidade Praia • Terminal de Vendas',
     email: 'caixa.praia@giro.com',
     badge: 'Apenas PDV',
     badgeColor: 'border-rose-500/40 bg-rose-500/10 text-rose-400',
@@ -89,7 +82,7 @@ export default function LoginPage() {
 
         if (!prof) {
           await supabase.auth.signOut()
-          setErrorMsg('Perfil de acesso não vinculado a uma filial/rede. Contate o administrador do sistema.')
+          setErrorMsg('Perfil de acesso não vinculado a uma unidade/rede. Contate o administrador do sistema.')
           return
         }
 
@@ -137,9 +130,7 @@ export default function LoginPage() {
           <div>
             {/* Logo & Título */}
             <div className="flex flex-col items-center text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-600 to-amber-400 text-slate-950 shadow-lg shadow-amber-500/20 mb-4">
-                <Store size={30} className="text-slate-950" />
-              </div>
+              <GiroLogoIcon size={64} className="mb-4 shadow-xl shadow-amber-500/20" />
               <h2 className="text-2xl font-extrabold text-white tracking-tight">
                 GIRO <span className="text-amber-400">SISTEMA</span>
               </h2>

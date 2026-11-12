@@ -24,6 +24,8 @@ interface ThermalReceiptProps {
   branchName?: string
   cashDeskName?: string
   operatorName?: string
+  networkName?: string
+  networkLogoUrl?: string | null
 }
 
 export function ThermalReceipt({
@@ -40,6 +42,8 @@ export function ThermalReceipt({
   branchName,
   cashDeskName,
   operatorName,
+  networkName,
+  networkLogoUrl,
 }: ThermalReceiptProps) {
   const handlePrint = () => {
     window.print()
@@ -47,14 +51,28 @@ export function ThermalReceipt({
 
   const subtotal = grossAmount ?? items.reduce((sum, it) => sum + it.quantity * it.unit_price, 0)
 
+  // Resolução inteligente da logo da rede
+  let resolvedLogo = networkLogoUrl || null
+  if (!resolvedLogo && networkName) {
+    const lower = networkName.toLowerCase()
+    if (lower.includes('ovo')) resolvedLogo = '/logo-grupo-ovo.png'
+    else if (lower.includes('bebidas')) resolvedLogo = '/logo-m-bebidas.png'
+  }
+  if (!resolvedLogo) resolvedLogo = '/logo-giro.png'
+
   return (
     <div className="flex flex-col items-center">
       {/* Container de Impressão (estilizado para papel térmico 80mm / 58mm) */}
       <div id="thermal-receipt" className="w-[300px] bg-white text-black p-4 font-mono text-xs shadow-2xl rounded-sm print:m-0 print:p-2 print:w-full print:shadow-none">
         {/* Cabeçalho */}
-        <div className="text-center border-b border-dashed border-black pb-3 mb-2">
-          <h2 className="text-sm font-black tracking-tighter uppercase">GIRO SISTEMA</h2>
-          <p className="text-[10px]">Gestão Comercial e Controle de Vendas</p>
+        <div className="text-center border-b border-dashed border-black pb-3 mb-2 flex flex-col items-center">
+          <img
+            src={resolvedLogo}
+            alt={networkName || 'Logo'}
+            className="h-11 w-11 object-contain mb-1.5 rounded-lg border border-neutral-300 print:border-none"
+          />
+          <h2 className="text-sm font-black tracking-tighter uppercase">{networkName || 'GIRO SISTEMA'}</h2>
+          <p className="text-[10px] text-neutral-800">Gestão Comercial e Controle de Vendas</p>
           <div className="text-[10px] font-bold uppercase text-neutral-900 mt-1 space-y-0.5">
             <p>LOJA: {branchName || 'Matriz / Loja Padrão'}</p>
             {cashDeskName && <p>TERMINAL: {cashDeskName}</p>}

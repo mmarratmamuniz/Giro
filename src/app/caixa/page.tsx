@@ -138,7 +138,7 @@ export default function CaixaPage() {
               <thead className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-bold uppercase">
                 <tr>
                   <th className="py-2.5 px-3">Turno</th>
-                  <th className="py-2.5 px-3">Filial / Caixa</th>
+                  <th className="py-2.5 px-3">Unidade / Caixa</th>
                   <th className="py-2.5 px-3">Abertura</th>
                   <th className="py-2.5 px-3">Fundo Inicial</th>
                   <th className="py-2.5 px-3">Esperado</th>
@@ -196,7 +196,7 @@ export default function CaixaPage() {
           <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
             {transactions.length === 0 ? (
               <div className="py-12 text-center text-xs text-slate-500">
-                Nenhuma sangria ou suprimento registrado para a filial ativa.
+                Nenhuma sangria ou suprimento registrado para a unidade ativa.
               </div>
             ) : (
               transactions.map((t) => (

@@ -35,6 +35,13 @@ export function CashShiftModal({
   const [cashDesks, setCashDesks] = useState<any[]>([])
   const [selectedDeskId, setSelectedDeskId] = useState<string>('')
   const [supabase] = useState(() => createClient())
+  const [shiftSummary, setShiftSummary] = useState<{
+    dinheiro: number
+    pix: number
+    cartao: number
+    totalFaturado: number
+    totalVendas: number
+  } | null>(null)
 
   // Sincroniza modalType e limpa campos sempre que abrir ou mudar o turno atual
   useEffect(() => {
@@ -44,6 +51,46 @@ export function CashShiftModal({
       setReason('')
     }
   }, [isOpen, currentShift])
+
+  // Busca resumo de vendas do turno para exibição no fechamento
+  useEffect(() => {
+    if (isOpen && currentShift) {
+      const shiftId = currentShift.id
+      async function fetchSummary() {
+        const { data } = await supabase
+          .from('sales')
+          .select('payment_method, total_amount, status')
+          .eq('shift_id', shiftId)
+        if (data) {
+          const validSales = data.filter(
+            (s) =>
+              (s.status || '').toUpperCase() === 'COMPLETED' ||
+              (!['CANCELED', 'CANCELLED'].includes((s.status || '').toUpperCase()) && s.status)
+          )
+          let dinheiro = 0
+          let pix = 0
+          let cartao = 0
+          validSales.forEach((s) => {
+            const val = Number(s.total_amount || 0)
+            const pm = (s.payment_method || '').toLowerCase()
+            if (pm.includes('dinheiro')) dinheiro += val
+            else if (pm.includes('pix')) pix += val
+            else cartao += val
+          })
+          setShiftSummary({
+            dinheiro,
+            pix,
+            cartao,
+            totalFaturado: dinheiro + pix + cartao,
+            totalVendas: validSales.length,
+          })
+        }
+      }
+      fetchSummary()
+    } else {
+      setShiftSummary(null)
+    }
+  }, [isOpen, currentShift, supabase])
 
   // Ajusta filial respeitando trava de operador
   useEffect(() => {
@@ -88,7 +135,7 @@ export function CashShiftModal({
         profile?.branch_id || selectedBranch || (selectedBranchId !== 'ALL' ? selectedBranchId : branches[0]?.id || null)
 
       if (!targetBranchId) {
-        showWarning('Filial Obrigatória', 'Selecione uma filial para abrir o turno de caixa.')
+        showWarning('Unidade Obrigatória', 'Selecione uma unidade para abrir o turno de caixa.')
         setLoading(false)
         return
       }
@@ -216,8 +263,32 @@ export function CashShiftModal({
         confirmText: 'Concluir Fechamento',
         content: (
           <div className="space-y-3 rounded-2xl bg-slate-950/80 border border-slate-800 p-4">
+            {shiftSummary && shiftSummary.totalVendas > 0 && (
+              <div className="space-y-1.5 pb-3 border-b border-slate-800 text-xs">
+                <p className="font-bold text-slate-300 uppercase tracking-wider text-[10px]">Resumo de Vendas do Turno</p>
+                <div className="flex justify-between text-slate-400">
+                  <span>Vendas em Pix (Banco):</span>
+                  <span className="font-mono text-amber-400 font-semibold">{formatCurrency(shiftSummary.pix)}</span>
+                </div>
+                {shiftSummary.cartao > 0 && (
+                  <div className="flex justify-between text-slate-400">
+                    <span>Vendas em Cartão (Banco):</span>
+                    <span className="font-mono text-sky-400 font-semibold">{formatCurrency(shiftSummary.cartao)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-slate-400">
+                  <span>Vendas em Dinheiro (Gaveta):</span>
+                  <span className="font-mono text-emerald-400 font-semibold">{formatCurrency(shiftSummary.dinheiro)}</span>
+                </div>
+                <div className="flex justify-between font-bold text-white pt-1">
+                  <span>Faturamento Líquido Total:</span>
+                  <span className="font-mono text-emerald-400">{formatCurrency(shiftSummary.totalFaturado)}</span>
+                </div>
+              </div>
+            )}
+            <p className="font-bold text-slate-300 uppercase tracking-wider text-[10px]">Conciliação da Gaveta (Dinheiro Físico)</p>
             <div className="flex justify-between text-xs text-slate-300">
-              <span>Esperado no Sistema:</span>
+              <span>Esperado na Gaveta:</span>
               <span className="font-mono font-bold text-white">{formatCurrency(systemAmount)}</span>
             </div>
             <div className="flex justify-between text-xs text-slate-300">
@@ -305,7 +376,7 @@ export function CashShiftModal({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-slate-400 flex items-center gap-1">
-                    <Store size={12} className="text-amber-400" /> Filial / Loja
+                    <Store size={12} className="text-amber-400" /> Unidade / Loja
                   </label>
                   <select
                     disabled={!!profile?.branch_id}
@@ -377,18 +448,43 @@ export function CashShiftModal({
         ) : modalType === 'close' ? (
           /* Formulário de Fechamento */
           <form onSubmit={handleCloseShift} className="space-y-4">
-            <div className="rounded-xl bg-slate-950 p-3.5 border border-slate-800 text-xs space-y-1 text-slate-400">
+            <div className="rounded-xl bg-slate-950 p-3.5 border border-slate-800 text-xs space-y-1.5 text-slate-400">
               <div className="flex justify-between">
-                <span>Fundo Inicial:</span>
+                <span>Fundo Inicial (Dinheiro):</span>
                 <span className="font-mono text-white font-bold">{formatCurrency(currentShift.initial_amount)}</span>
               </div>
-              <div className="flex justify-between">
+              {shiftSummary && shiftSummary.totalVendas > 0 && (
+                <>
+                  <div className="flex justify-between text-slate-300">
+                    <span>Vendas em Pix (Banco):</span>
+                    <span className="font-mono text-amber-400 font-semibold">{formatCurrency(shiftSummary.pix)}</span>
+                  </div>
+                  {shiftSummary.cartao > 0 && (
+                    <div className="flex justify-between text-slate-300">
+                      <span>Vendas em Cartão (Banco):</span>
+                      <span className="font-mono text-sky-400 font-semibold">{formatCurrency(shiftSummary.cartao)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-slate-300">
+                    <span>Vendas em Dinheiro (Gaveta):</span>
+                    <span className="font-mono text-emerald-400 font-semibold">{formatCurrency(shiftSummary.dinheiro)}</span>
+                  </div>
+                  <div className="flex justify-between pt-1 border-t border-slate-800/80 font-bold text-white">
+                    <span>Faturamento Total do Turno:</span>
+                    <span className="font-mono text-emerald-400">{formatCurrency(shiftSummary.totalFaturado)}</span>
+                  </div>
+                </>
+              )}
+              <div className="flex justify-between pt-1 text-[11px] text-slate-500">
                 <span>Caixa Aberto em:</span>
                 <span className="text-slate-300">{new Date(currentShift.opened_at).toLocaleTimeString('pt-BR')}</span>
               </div>
             </div>
             <div>
-              <label className="text-xs font-semibold text-slate-400">Valor Contado na Gaveta em Dinheiro (R$)</label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-400">Valor Contado na Gaveta em Dinheiro (R$)</label>
+                <span className="text-[10px] text-amber-400 font-medium">Apenas cédulas e moedas físicas</span>
+              </div>
               <input
                 type="number"
                 step="0.01"

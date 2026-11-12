@@ -62,7 +62,7 @@ export default function PDVPage() {
   const { items, addItem, removeItem, updateQuantity, clearCart, totalAmount, totalItems } = useCart()
   const { user, profile } = useAuth()
   const { showError, showWarning, openDialog } = useFeedback()
-  const { branches, selectedBranchId, selectedNetworkId } = useNetwork()
+  const { networks, branches, selectedBranchId, selectedNetworkId } = useNetwork()
   const [supabase] = useState(() => createClient())
 
   const isCashier = profile?.role === 'cashier_operator' || profile?.role === 'operator'
@@ -181,19 +181,12 @@ export default function PDVPage() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [items.length, isPaymentModalOpen, isShiftModalOpen, saleSuccess, currentShift])
 
-  // Cálculo do Desconto (com teto de 10% para caixas)
+  // Cálculo do Desconto (livre até o total da venda ou 100%)
   const rawDiscount = parseFloat(discountInput) || 0
-  let calculatedDiscount =
+  const calculatedDiscount =
     discountType === 'percent'
       ? (totalAmount * Math.min(100, rawDiscount)) / 100
       : Math.min(totalAmount, rawDiscount)
-
-  if (isCashier) {
-    const maxDiscount = totalAmount * 0.10
-    if (calculatedDiscount > maxDiscount) {
-      calculatedDiscount = maxDiscount
-    }
-  }
 
   const discountAmount = calculatedDiscount
   const finalTotalToPay = Math.max(0, totalAmount - discountAmount)
@@ -294,6 +287,7 @@ export default function PDVPage() {
 
       const branchObj = branches.find((b) => b.id === targetBranchId)
       const activeBranchName = branchObj?.name || 'Geral'
+      const netObj = networks.find((n) => n.id === branchObj?.network_id || n.id === profile?.network_id)
       const activeDeskName = (currentShift as any)?.cash_desk?.name || 'Caixa 01'
 
       setSaleSuccess({
@@ -307,6 +301,8 @@ export default function PDVPage() {
         branchName: activeBranchName,
         cashDeskName: activeDeskName,
         operatorName: profile?.full_name || (user as any)?.user_metadata?.full_name || 'Operador',
+        networkName: netObj?.name,
+        networkLogoUrl: netObj?.logo_url,
         items: items.map((it) => ({
           product_name: it.product.name,
           quantity: it.quantity,
@@ -327,7 +323,7 @@ export default function PDVPage() {
   }
 
   return (
-    <div className="relative flex flex-col lg:grid lg:grid-cols-12 gap-5 min-h-[calc(100vh-6rem)] lg:h-[calc(100vh-8.5rem)] animate-in fade-in duration-200 pb-20 lg:pb-0">
+    <div className="relative flex flex-col lg:grid lg:grid-cols-12 gap-5 lg:min-h-0 lg:h-[calc(100vh-9.5rem)] lg:overflow-hidden animate-in fade-in duration-200 pb-20 lg:pb-0">
       {/* Coluna Esquerda: Catálogo, Busca e Status de Caixa (8 colunas) */}
       <div className="flex flex-col gap-3.5 lg:col-span-7 xl:col-span-8 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 p-3.5 sm:p-4">
         {/* Barra de Status do Caixa & Atalhos */}
@@ -480,11 +476,11 @@ export default function PDVPage() {
       )}
 
       <div
-        className={`fixed inset-x-0 bottom-0 z-50 rounded-t-3xl border-t border-slate-700 bg-slate-900 p-4 shadow-2xl transition-transform duration-300 lg:static lg:z-auto lg:flex lg:flex-col lg:justify-between lg:rounded-2xl lg:border lg:border-slate-800 lg:bg-slate-900/60 lg:shadow-xl lg:col-span-5 xl:col-span-4 lg:translate-y-0 ${
+        className={`fixed inset-x-0 bottom-0 z-50 rounded-t-3xl border-t border-slate-700 bg-slate-900 p-4 shadow-2xl transition-transform duration-300 lg:static lg:z-auto lg:flex lg:flex-col lg:justify-between lg:h-full lg:min-h-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-slate-800 lg:bg-slate-900/60 lg:shadow-xl lg:col-span-5 xl:col-span-4 lg:translate-y-0 ${
           isMobileCartOpen ? 'translate-y-0 max-h-[85vh] overflow-y-auto' : 'translate-y-full lg:translate-y-0'
         }`}
       >
-        <div>
+        <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
           {/* Cabeçalho do Carrinho */}
           <div className="flex items-center justify-between pb-3 border-b border-slate-800">
             <div className="flex items-center gap-2">
@@ -510,7 +506,7 @@ export default function PDVPage() {
           </div>
 
           {/* Lista de Itens do Carrinho */}
-          <div className="max-h-56 lg:h-[calc(100vh-27.5rem)] overflow-y-auto py-2.5 space-y-2 pr-1">
+          <div className="flex-1 min-h-0 overflow-y-auto py-2.5 space-y-2 pr-1">
             {items.length === 0 ? (
               <div className="flex h-36 lg:h-full flex-col items-center justify-center text-center p-4 text-slate-500">
                 <Receipt size={32} className="mb-2 text-slate-700" />
@@ -523,8 +519,8 @@ export default function PDVPage() {
                   key={item.product.id}
                   className="flex items-center justify-between rounded-xl bg-slate-950/50 p-2.5 border border-slate-800/80"
                 >
-                  <div className="overflow-hidden pr-2">
-                    <h6 className="truncate text-xs font-bold text-white max-w-[130px]">
+                  <div className="overflow-hidden pr-2 flex-1 min-w-0">
+                    <h6 className="truncate text-xs font-bold text-white">
                       {item.product.name}
                     </h6>
                     <span className="text-[10px] text-emerald-400 font-semibold">
@@ -533,7 +529,7 @@ export default function PDVPage() {
                   </div>
 
                   {/* Controles de Quantidade */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     <div className="flex items-center gap-1 rounded-lg bg-slate-900 border border-slate-800 p-0.5">
                       <button
                         onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
@@ -568,7 +564,7 @@ export default function PDVPage() {
         </div>
 
         {/* Seção de Descontos e Totalizador */}
-        <div className="border-t border-slate-800 pt-3 space-y-2.5">
+        <div className="border-t border-slate-800 pt-3 space-y-2.5 shrink-0">
           {/* Campo de Desconto */}
           <div className="flex items-center gap-2 rounded-xl bg-slate-950 p-2 border border-slate-800">
             <span className="text-xs font-bold text-slate-400 uppercase text-[10px]">Desconto:</span>
@@ -607,12 +603,6 @@ export default function PDVPage() {
               </span>
             )}
           </div>
-
-          {isCashier && rawDiscount > 0 && calculatedDiscount === totalAmount * 0.10 && (
-            <p className="text-[9px] text-amber-400 font-medium">
-              * Desconto limitado a 10% do total para operador de caixa.
-            </p>
-          )}
 
           {/* Subtotal e Total Líquido */}
           <div className="space-y-1 text-xs">
@@ -779,6 +769,8 @@ export default function PDVPage() {
               branchName={saleSuccess.branchName}
               cashDeskName={saleSuccess.cashDeskName}
               operatorName={saleSuccess.operatorName}
+              networkName={saleSuccess.networkName}
+              networkLogoUrl={saleSuccess.networkLogoUrl}
               onClose={() => setSaleSuccess(null)}
             />
           </div>

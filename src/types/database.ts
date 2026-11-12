@@ -14,18 +14,24 @@ export interface Database {
           id: string
           name: string
           description: string | null
+          document_cnpj?: string | null
+          logo_url?: string | null
           created_at: string
         }
         Insert: {
           id?: string
           name: string
           description?: string | null
+          document_cnpj?: string | null
+          logo_url?: string | null
           created_at?: string
         }
         Update: {
           id?: string
           name?: string
           description?: string | null
+          document_cnpj?: string | null
+          logo_url?: string | null
           created_at?: string
         }
       }
@@ -55,6 +61,7 @@ export interface Database {
           network_id: string
           unit_id: string | null
           name: string
+          location: string | null
           created_at: string
         }
         Insert: {
@@ -62,6 +69,7 @@ export interface Database {
           network_id: string
           unit_id?: string | null
           name: string
+          location?: string | null
           created_at?: string
         }
         Update: {
@@ -69,6 +77,7 @@ export interface Database {
           network_id?: string
           unit_id?: string | null
           name?: string
+          location?: string | null
           created_at?: string
         }
       }
@@ -456,6 +465,7 @@ export interface Database {
           email: string | null
           full_name: string | null
           role: string
+          job_title?: string | null
           network_id: string | null
           unit_id: string | null
           branch_id: string | null
@@ -467,6 +477,7 @@ export interface Database {
           email?: string | null
           full_name?: string | null
           role?: string
+          job_title?: string | null
           network_id?: string | null
           unit_id?: string | null
           branch_id?: string | null
@@ -478,6 +489,7 @@ export interface Database {
           email?: string | null
           full_name?: string | null
           role?: string
+          job_title?: string | null
           network_id?: string | null
           unit_id?: string | null
           branch_id?: string | null
@@ -548,6 +560,19 @@ export interface Database {
           p_network_id?: string | null
           p_unit_id?: string | null
           p_branch_id?: string | null
+          p_job_title?: string | null
+        }
+        Returns: Json
+      }
+      admin_update_user: {
+        Args: {
+          p_user_id: string
+          p_full_name: string
+          p_role: string
+          p_network_id?: string | null
+          p_branch_id?: string | null
+          p_job_title?: string | null
+          p_new_password?: string | null
         }
         Returns: Json
       }

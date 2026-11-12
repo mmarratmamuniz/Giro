@@ -20,7 +20,9 @@ import {
   X,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/auth-context'
+import { useNetwork } from '@/contexts/network-context'
 import { useMobileMenu } from '@/contexts/mobile-menu-context'
+import { GiroLogoIcon, NetworkLogo } from '@/components/ui/giro-logo'
 import { cn } from '@/lib/utils'
 
 const navItems = [
@@ -29,20 +31,25 @@ const navItems = [
   { href: '/caixa', label: 'Controle de Caixa', icon: DollarSign },
   { href: '/estoque', label: 'Estoque & Produtos', icon: Package },
   { href: '/compras', label: 'Entrada / Compras', icon: Truck },
-  { href: '/historico', label: 'Histórico de Vendas', icon: History },
-  { href: '/relatorios', label: 'Relatórios & CMV', icon: FileBarChart, adminOnly: true },
+  { href: '/relatorios', label: 'Relatórios & Histórico', icon: FileBarChart, adminOnly: true },
   { href: '/usuarios', label: 'Usuários', icon: Users, adminOnly: true },
-  { href: '/redes', label: 'Redes & Filiais', icon: Network, adminOnly: true },
+  { href: '/redes', label: 'Redes & Unidades', icon: Network, adminOnly: true },
 ]
 
 export function Sidebar() {
   const pathname = usePathname()
   const { profile, signOut } = useAuth()
+  const { networks, selectedNetworkId } = useNetwork()
   const { isMobileOpen, closeMobileMenu } = useMobileMenu()
   const [collapsed, setCollapsed] = useState(false)
 
   // Ocultar sidebar na tela de login
   if (pathname === '/login') return null
+
+  const isSuperAdmin = profile?.role === 'super_admin'
+  const activeNetwork = isSuperAdmin
+    ? (selectedNetworkId !== 'ALL' ? networks.find(n => n.id === selectedNetworkId) : null)
+    : networks.find(n => n.id === profile?.network_id)
 
   const isAdmin =
     profile?.role === 'super_admin' ||
@@ -80,18 +87,44 @@ export function Sidebar() {
 
         {/* Logo e Botão Fechar no Mobile */}
         <div className="flex h-20 items-center justify-between px-5 border-b border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 text-slate-950 font-bold shadow-lg shadow-amber-500/20">
-              <Store size={22} className="text-slate-950" />
-            </div>
+          <div className="flex items-center gap-3 overflow-hidden">
+            {activeNetwork ? (
+              <NetworkLogo
+                network={activeNetwork}
+                size={40}
+                className="shrink-0 shadow-lg shadow-amber-500/10"
+              />
+            ) : (
+              <GiroLogoIcon
+                size={40}
+                className="shrink-0 shadow-lg shadow-amber-500/20"
+              />
+            )}
+
             {(!collapsed || isMobileOpen) && (
               <div className="flex flex-col overflow-hidden">
-                <span className="font-extrabold tracking-tight text-lg text-white">
-                  GIRO <span className="text-amber-400">SISTEMA</span>
-                </span>
-                <span className="text-[10px] font-medium tracking-wider text-slate-400 uppercase">
-                  Gestão Comercial
-                </span>
+                {activeNetwork ? (
+                  <>
+                    <span
+                      className="font-extrabold tracking-tight text-base text-white truncate max-w-[170px]"
+                      title={activeNetwork.name}
+                    >
+                      {activeNetwork.name}
+                    </span>
+                    <span className="text-[10px] font-semibold tracking-wider text-amber-400 uppercase truncate">
+                      {isSuperAdmin ? 'Rede Selecionada' : 'Rede Conectada'}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="font-extrabold tracking-tight text-lg text-white">
+                      GIRO <span className="text-amber-400">SISTEMA</span>
+                    </span>
+                    <span className="text-[10px] font-medium tracking-wider text-slate-400 uppercase">
+                      {isSuperAdmin ? 'Super Admin' : 'Gestão Comercial'}
+                    </span>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -167,18 +200,16 @@ export function Sidebar() {
                 <span className="truncate text-xs font-semibold text-white">
                   {profile?.full_name || 'Usuário'}
                 </span>
-                <span className="text-[10px] font-medium text-amber-400 capitalize">
-                  {profile?.role === 'super_admin'
-                    ? 'Super Admin'
-                    : profile?.role === 'network_admin'
-                    ? 'Admin Rede'
-                    : profile?.role === 'unit_admin'
-                    ? 'Admin Unidade'
-                    : profile?.role === 'branch_admin'
-                    ? 'Admin Filial'
-                    : profile?.role === 'admin'
-                    ? 'Administrador'
-                    : profile?.role ? 'Operador' : 'Carregando...'}
+                <span className="text-[10px] font-medium text-amber-400 capitalize truncate">
+                  {profile?.job_title || (
+                    profile?.role === 'super_admin'
+                      ? 'Super Admin'
+                      : profile?.role === 'network_admin'
+                      ? 'Administrador de Rede'
+                      : profile?.role === 'cashier_operator' || profile?.role === 'operator'
+                      ? 'Operador de Caixa'
+                      : profile?.role || 'Carregando...'
+                  )}
                 </span>
               </div>
             )}

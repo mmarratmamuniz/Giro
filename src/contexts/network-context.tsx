@@ -8,6 +8,7 @@ export interface Network {
   id: string
   name: string
   document_cnpj: string | null
+  logo_url?: string | null
   created_at: string
 }
 
@@ -80,7 +81,19 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
         supabase.from('branches').select('*').order('name'),
       ])
 
-      if (netRes.data) setNetworks(netRes.data)
+      if (netRes.data) {
+        const mapped = netRes.data.map((net: any) => ({
+          ...net,
+          logo_url:
+            net.logo_url ||
+            (net.name?.toLowerCase().includes('ovo')
+              ? '/logo-grupo-ovo.png'
+              : net.name?.toLowerCase().includes('bebidas')
+              ? '/logo-m-bebidas.png'
+              : null),
+        }))
+        setNetworks(mapped)
+      }
       if (unitRes.data) setUnits(unitRes.data)
       if (branchRes.data) setBranches(branchRes.data)
     } catch (err) {

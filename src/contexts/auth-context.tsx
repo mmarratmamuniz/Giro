@@ -13,6 +13,7 @@ export interface Profile {
   email: string | null
   full_name: string | null
   role: 'super_admin' | 'network_admin' | 'unit_admin' | 'branch_admin' | 'cashier_operator' | 'admin' | 'operator'
+  job_title?: string | null
 }
 
 interface AuthContextType {

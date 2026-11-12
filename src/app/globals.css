@@ -25,31 +25,174 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Custom scrollbar discreta para tema escuro */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* ========================================================
+   IMPRESSÃO INTELIGENTE DUPLA: 80mm (CUPOM) vs A4 (RELATÓRIO)
+   ======================================================== */
 @media print {
-  /* Ocultar tudo na tela */
-  body * {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
+  /* Ocultar barra de rolagem em todos os elementos ao imprimir */
+  ::-webkit-scrollbar {
+    display: none !important;
+  }
+  * {
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
+  }
+
+  /* --------------------------------------------------------
+     MODO 1: CUPOM TÉRMICO (80mm) - QUANDO HÁ MODAL TÉRMICO NO DOM
+     -------------------------------------------------------- */
+  body:has(#thermal-receipt, #shift-thermal-receipt) * {
     visibility: hidden;
   }
 
-  /* Exibir exclusivamente o cupom térmico e seus elementos filhos */
-  #thermal-receipt,
-  #thermal-receipt * {
+  body:has(#thermal-receipt, #shift-thermal-receipt) #thermal-receipt,
+  body:has(#thermal-receipt, #shift-thermal-receipt) #thermal-receipt *,
+  body:has(#thermal-receipt, #shift-thermal-receipt) #shift-thermal-receipt,
+  body:has(#thermal-receipt, #shift-thermal-receipt) #shift-thermal-receipt * {
     visibility: visible;
   }
 
-  /* Posicionar o cupom no topo esquerdo da página impressa */
-  #thermal-receipt {
+  body:has(#thermal-receipt, #shift-thermal-receipt) #thermal-receipt,
+  body:has(#thermal-receipt, #shift-thermal-receipt) #shift-thermal-receipt {
     position: absolute;
     left: 0;
     top: 0;
     width: 100% !important;
     max-width: 80mm !important;
-    margin: 0 !important;
+    margin: 0 auto !important;
     padding: 2mm !important;
     box-shadow: none !important;
     border: none !important;
-    background: white !important;
-    color: black !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  body:has(#thermal-receipt, #shift-thermal-receipt) img {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    visibility: visible !important;
+    display: block !important;
+  }
+
+  /* --------------------------------------------------------
+     MODO 2: RELATÓRIO EXECUTIVO A4 / PDF - QUANDO NÃO HÁ MODAL TÉRMICO
+     -------------------------------------------------------- */
+  body:not(:has(#thermal-receipt, #shift-thermal-receipt)) aside,
+  body:not(:has(#thermal-receipt, #shift-thermal-receipt)) header,
+  body:not(:has(#thermal-receipt, #shift-thermal-receipt)) nav,
+  body:not(:has(#thermal-receipt, #shift-thermal-receipt)) .no-print,
+  body:not(:has(#thermal-receipt, #shift-thermal-receipt)) button:not(.allow-print) {
+    display: none !important;
+  }
+
+  body:not(:has(#thermal-receipt, #shift-thermal-receipt)) {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  body:not(:has(#thermal-receipt, #shift-thermal-receipt)) main {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    background: #ffffff !important;
+  }
+
+  body:not(:has(#thermal-receipt, #shift-thermal-receipt)) .overflow-x-auto,
+  body:not(:has(#thermal-receipt, #shift-thermal-receipt)) .overflow-hidden,
+  body:not(:has(#thermal-receipt, #shift-thermal-receipt)) .overflow-y-auto {
+    overflow: visible !important;
+  }
+
+  body:not(:has(#thermal-receipt, #shift-thermal-receipt)) #print-report-area {
+    visibility: visible !important;
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  body:not(:has(#thermal-receipt, #shift-thermal-receipt)) #print-report-area * {
+    color: inherit !important;
+    text-shadow: none !important;
+  }
+
+  body:not(:has(#thermal-receipt, #shift-thermal-receipt)) .print-header-report {
+    display: block !important;
+    margin-bottom: 14px;
+    border-bottom: 2px solid #0f172a;
+    padding-bottom: 8px;
+  }
+
+  body:not(:has(#thermal-receipt, #shift-thermal-receipt)) .print-logo,
+  body:not(:has(#thermal-receipt, #shift-thermal-receipt)) img {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    visibility: visible !important;
+    max-height: 56px !important;
+    object-fit: contain !important;
+  }
+
+  body:not(:has(#thermal-receipt, #shift-thermal-receipt)) .print-card-clean {
+    border: 1px solid #cbd5e1 !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+  }
+
+  body:not(:has(#thermal-receipt, #shift-thermal-receipt)) table {
+    width: 100% !important;
+    table-layout: auto !important;
+    border-collapse: collapse !important;
+    font-size: 9pt !important;
+  }
+
+  body:not(:has(#thermal-receipt, #shift-thermal-receipt)) thead {
+    display: table-header-group !important;
+    background: #f1f5f9 !important;
+  }
+
+  body:not(:has(#thermal-receipt, #shift-thermal-receipt)) th,
+  body:not(:has(#thermal-receipt, #shift-thermal-receipt)) td {
+    color: #0f172a !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    padding: 5px 6px !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+  }
+
+  body:not(:has(#thermal-receipt, #shift-thermal-receipt)) tfoot {
+    display: table-row-group !important;
+    font-weight: bold !important;
+    background: #f8fafc !important;
+  }
+
+  body:not(:has(#thermal-receipt, #shift-thermal-receipt)) tfoot td,
+  body:not(:has(#thermal-receipt, #shift-thermal-receipt)) tfoot th {
+    border-top: 2px solid #0f172a !important;
+    border-bottom: 2px solid #0f172a !important;
+    color: #0f172a !important;
+    padding: 6px 6px !important;
   }
 }
-

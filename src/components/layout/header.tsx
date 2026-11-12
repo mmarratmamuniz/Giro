@@ -13,10 +13,10 @@ const titles: Record<string, { title: string; subtitle: string }> = {
   '/caixa': { title: 'Controle de Caixa', subtitle: 'Abertura, sangrias, suprimentos e conciliação de turno' },
   '/estoque': { title: 'Gestão de Estoque', subtitle: 'Cadastro de produtos, categorias e alertas' },
   '/compras': { title: 'Entrada de Mercadorias', subtitle: 'Registro de compras e fornecedores' },
-  '/historico': { title: 'Histórico de Vendas', subtitle: 'Consultas, detalhes e comprovantes' },
-  '/relatorios': { title: 'Relatórios & CMV', subtitle: 'Análise de margens de lucro e faturamento' },
+  '/historico': { title: 'Relatórios & Histórico', subtitle: 'Consultas, detalhes e comprovantes' },
+  '/relatorios': { title: 'Relatórios & Histórico', subtitle: 'DRE, vendas, fechamentos de caixa e compras' },
   '/usuarios': { title: 'Gestão de Usuários', subtitle: 'Controle de acessos de operadores e admins' },
-  '/redes': { title: 'Redes & Unidades', subtitle: 'Gestão da estrutura de redes, polos, filiais e caixas' },
+  '/redes': { title: 'Redes & Unidades', subtitle: 'Gestão da estrutura de redes, unidades e caixas' },
 }
 
 export function Header() {
@@ -25,13 +25,10 @@ export function Header() {
   const { toggleMobileMenu } = useMobileMenu()
   const { 
     networks, 
-    units,
     branches, 
     selectedNetworkId, 
-    selectedUnitId,
     selectedBranchId, 
     setSelectedNetworkId, 
-    setSelectedUnitId,
     setSelectedBranchId 
   } = useNetwork()
 
@@ -70,21 +67,11 @@ export function Header() {
   }
 
   const isSuperOrNetwork = profile?.role === 'super_admin' || profile?.role === 'network_admin'
-  const isSuperNetworkOrUnit = isSuperOrNetwork || profile?.role === 'unit_admin'
 
-  // Filtrar unidades pela rede selecionada
-  const availableUnits = selectedNetworkId === 'ALL'
-    ? units
-    : units.filter((u) => u.network_id === selectedNetworkId)
-
-  // Filtrar filiais pela rede selecionada e pela unidade selecionada
-  let availableBranches = selectedNetworkId === 'ALL'
+  // Filtrar unidades (branches) pela rede selecionada
+  const availableBranches = selectedNetworkId === 'ALL'
     ? branches
     : branches.filter((b) => b.network_id === selectedNetworkId)
-
-  if (selectedUnitId !== 'ALL') {
-    availableBranches = availableBranches.filter((b) => b.unit_id === selectedUnitId)
-  }
 
   return (
     <header className="flex h-16 sm:h-20 items-center justify-between border-b border-slate-800 bg-slate-900/50 px-4 sm:px-8 backdrop-blur-md sticky top-0 z-20">
@@ -107,8 +94,8 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-2 sm:gap-4">
-        {/* Seletor Corporativo de Rede, Unidade e Filial */}
-        {isSuperNetworkOrUnit && (networks.length > 0 || units.length > 0 || branches.length > 0) && (
+        {/* Seletor Corporativo de Rede e Unidade (2 Níveis) */}
+        {isSuperOrNetwork && (networks.length > 0 || branches.length > 0) && (
           <div className="hidden md:flex items-center gap-2 bg-slate-950/80 border border-slate-800 rounded-xl p-1 text-xs">
             {profile?.role === 'super_admin' && networks.length > 0 && (
               <div className="flex items-center gap-1.5 px-2">
@@ -117,7 +104,6 @@ export function Header() {
                   value={selectedNetworkId}
                   onChange={(e) => {
                     setSelectedNetworkId(e.target.value)
-                    setSelectedUnitId('ALL')
                     setSelectedBranchId('ALL')
                   }}
                   className="bg-transparent text-slate-200 font-medium focus:outline-none cursor-pointer"
@@ -132,36 +118,15 @@ export function Header() {
               </div>
             )}
 
-            {isSuperOrNetwork && availableUnits.length > 0 && (
-              <div className="flex items-center gap-1.5 px-2 border-l border-slate-800">
-                <MapPin size={13} className="text-amber-400" />
-                <select
-                  value={selectedUnitId}
-                  onChange={(e) => {
-                    setSelectedUnitId(e.target.value)
-                    setSelectedBranchId('ALL')
-                  }}
-                  className="bg-transparent text-slate-200 font-medium focus:outline-none cursor-pointer"
-                >
-                  <option value="ALL" className="bg-slate-900 text-white">Todas as Unidades</option>
-                  {availableUnits.map((u) => (
-                    <option key={u.id} value={u.id} className="bg-slate-900 text-white">
-                      {u.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
             {availableBranches.length > 0 && (
-              <div className="flex items-center gap-1.5 px-2 border-l border-slate-800">
+              <div className={`flex items-center gap-1.5 px-2 ${profile?.role === 'super_admin' && networks.length > 0 ? 'border-l border-slate-800' : ''}`}>
                 <Store size={13} className="text-amber-400" />
                 <select
                   value={selectedBranchId}
                   onChange={(e) => setSelectedBranchId(e.target.value)}
                   className="bg-transparent text-slate-200 font-medium focus:outline-none cursor-pointer"
                 >
-                  <option value="ALL" className="bg-slate-900 text-white">Todas as Filiais (Consolidado)</option>
+                  <option value="ALL" className="bg-slate-900 text-white">Todas as Unidades</option>
                   {availableBranches.map((b) => (
                     <option key={b.id} value={b.id} className="bg-slate-900 text-white">
                       {b.name}
@@ -173,13 +138,13 @@ export function Header() {
           </div>
         )}
 
-        {/* Badge Informativo da Filial Fixa para Gerentes de Loja e Caixas */}
-        {!isSuperNetworkOrUnit && (profile?.branch_id || selectedBranchId !== 'ALL') && (
+        {/* Badge Informativo da Unidade Fixa para Usuários com Unidade Vinculada */}
+        {(!isSuperOrNetwork || profile?.branch_id) && (profile?.branch_id || selectedBranchId !== 'ALL') && (
           <div className="hidden sm:flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-1.5 text-xs shadow-sm">
             <Store size={14} className="text-emerald-400 shrink-0" />
-            <span className="text-slate-400 font-medium">Filial:</span>
+            <span className="text-slate-400 font-medium">Unidade:</span>
             <span className="font-bold text-white">
-              {branches.find((b) => b.id === (profile?.branch_id || selectedBranchId))?.name || 'Filial'}
+              {branches.find((b) => b.id === (profile?.branch_id || selectedBranchId))?.name || 'Unidade'}
             </span>
           </div>
         )}
