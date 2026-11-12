@@ -550,3 +550,88 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
+
+-- =========================================================================
+-- 9. RPC DE EXCLUSÃO DEFINITIVA DE PRODUTOS & SANEAMENTO DE INATIVOS
+-- =========================================================================
+
+-- Ajuste de constraints de chave estrangeira para permitir exclusão segura preservando histórico
+ALTER TABLE public.sale_items DROP CONSTRAINT IF EXISTS sale_items_product_id_fkey;
+ALTER TABLE public.sale_items 
+  ADD CONSTRAINT sale_items_product_id_fkey 
+  FOREIGN KEY (product_id) REFERENCES public.products(id) ON DELETE SET NULL;
+
+ALTER TABLE public.purchase_items DROP CONSTRAINT IF EXISTS purchase_items_product_id_fkey;
+ALTER TABLE public.purchase_items 
+  ADD CONSTRAINT purchase_items_product_id_fkey 
+  FOREIGN KEY (product_id) REFERENCES public.products(id) ON DELETE SET NULL;
+
+ALTER TABLE public.stock_movements DROP CONSTRAINT IF EXISTS stock_movements_product_id_fkey;
+ALTER TABLE public.stock_movements 
+  ADD CONSTRAINT stock_movements_product_id_fkey 
+  FOREIGN KEY (product_id) REFERENCES public.products(id) ON DELETE CASCADE;
+
+-- Exclusão definitiva de todos os produtos inativos de teste
+DELETE FROM public.stock_movements WHERE product_id IN (SELECT id FROM public.products WHERE is_active = false);
+UPDATE public.sale_items SET product_id = NULL WHERE product_id IN (SELECT id FROM public.products WHERE is_active = false);
+UPDATE public.purchase_items SET product_id = NULL WHERE product_id IN (SELECT id FROM public.products WHERE is_active = false);
+DELETE FROM public.products WHERE is_active = false;
+
+-- RPC Segura para exclusão de produtos pela interface (Super Admin e Network Admin)
+CREATE OR REPLACE FUNCTION public.admin_delete_product(p_product_id bigint)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    v_caller_id UUID;
+    v_caller_role TEXT;
+    v_caller_net UUID;
+    v_prod_net UUID;
+    v_prod_name TEXT;
+BEGIN
+    v_caller_id := auth.uid();
+    IF v_caller_id IS NULL THEN
+        RAISE EXCEPTION 'Não autenticado.';
+    END IF;
+
+    SELECT role, network_id INTO v_caller_role, v_caller_net
+    FROM public.profiles
+    WHERE id = v_caller_id;
+
+    IF v_caller_role NOT IN ('super_admin', 'network_admin') THEN
+        RAISE EXCEPTION 'Permissão negada. Apenas administradores podem excluir produtos.';
+    END IF;
+
+    SELECT network_id, name INTO v_prod_net, v_prod_name
+    FROM public.products
+    WHERE id = p_product_id;
+
+    IF v_prod_name IS NULL THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Produto não encontrado ou já excluído.');
+    END IF;
+
+    IF v_caller_role = 'network_admin' AND v_caller_net IS DISTINCT FROM v_prod_net THEN
+        RAISE EXCEPTION 'Permissão negada. Você só pode excluir produtos pertencentes à sua própria rede.';
+    END IF;
+
+    -- Deletar registros dependentes do produto com integridade
+    DELETE FROM public.stock_movements WHERE product_id = p_product_id;
+    UPDATE public.purchase_items SET product_id = NULL WHERE product_id = p_product_id;
+    UPDATE public.sale_items SET product_id = NULL WHERE product_id = p_product_id;
+
+    -- Deletar o produto definitivamente
+    DELETE FROM public.products WHERE id = p_product_id;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'message', format('Produto "%s" excluído com sucesso.', v_prod_name),
+        'deleted_product_id', p_product_id
+    );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.admin_delete_product(bigint) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.admin_delete_product(bigint) TO authenticated;
+

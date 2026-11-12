@@ -29,8 +29,7 @@ const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/pdv', label: 'Frente de Caixa (PDV)', icon: ShoppingCart },
   { href: '/caixa', label: 'Controle de Caixa', icon: DollarSign },
-  { href: '/estoque', label: 'Estoque & Produtos', icon: Package },
-  { href: '/compras', label: 'Entrada / Compras', icon: Truck },
+  { href: '/estoque', label: 'Estoque & Compras', icon: Package },
   { href: '/relatorios', label: 'Relatórios & Histórico', icon: FileBarChart, adminOnly: true },
   { href: '/usuarios', label: 'Usuários', icon: Users, adminOnly: true },
   { href: '/redes', label: 'Redes & Unidades', icon: Network, adminOnly: true },
@@ -162,7 +161,7 @@ export function Sidebar() {
             if (item.adminOnly && !isAdmin) return null
 
             const Icon = item.icon
-            const isActive = pathname === item.href
+            const isActive = pathname === item.href || (item.href === '/estoque' && pathname === '/compras')
 
             return (
               <Link

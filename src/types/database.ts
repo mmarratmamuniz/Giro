@@ -582,6 +582,12 @@ export interface Database {
         }
         Returns: Json
       }
+      admin_delete_product: {
+        Args: {
+          p_product_id: number
+        }
+        Returns: Json
+      }
     }
   }
 }
