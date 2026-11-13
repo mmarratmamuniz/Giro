@@ -59,7 +59,9 @@ export default function LoginPage() {
   const router = useRouter()
   const [supabase] = useState(() => createClient())
 
-  const isDev = process.env.NODE_ENV === 'development'
+  const isDevOrDemo =
+    process.env.NODE_ENV === 'development' ||
+    process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
 
   const executeLogin = async (loginEmail: string, loginPass: string) => {
     setErrorMsg('')
@@ -115,7 +117,7 @@ export default function LoginPage() {
   }
 
   const handleQuickLogin = (targetEmail: string) => {
-    if (!isDev) return
+    if (!isDevOrDemo) return
     setEmail(targetEmail)
     setPassword('123456')
     executeLogin(targetEmail, '123456')
@@ -123,10 +125,10 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-950 p-4 sm:p-8">
-      <div className={`w-full ${isDev ? 'max-w-4xl grid grid-cols-1 lg:grid-cols-12' : 'max-w-md'} gap-6 items-stretch`}>
+      <div className={`w-full ${isDevOrDemo ? 'max-w-4xl grid grid-cols-1 lg:grid-cols-12' : 'max-w-md'} gap-6 items-stretch`}>
         
         {/* Card Principal de Login */}
-        <div className={`${isDev ? 'lg:col-span-6' : 'w-full'} rounded-3xl border border-slate-800 bg-slate-900/80 p-8 shadow-2xl backdrop-blur-md flex flex-col justify-between`}>
+        <div className={`${isDevOrDemo ? 'lg:col-span-6' : 'w-full'} rounded-3xl border border-slate-800 bg-slate-900/80 p-8 shadow-2xl backdrop-blur-md flex flex-col justify-between`}>
           <div>
             {/* Logo & Título */}
             <div className="flex flex-col items-center text-center">
@@ -191,8 +193,8 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Card Lateral: Acesso Rápido de Teste (Cargos Fictícios) - Apenas em Desenvolvimento */}
-        {isDev && (
+        {/* Card Lateral: Acesso Rápido de Teste (Cargos Fictícios) - Desenvolvimento ou Modo Demo */}
+        {isDevOrDemo && (
           <div className="lg:col-span-6 rounded-3xl border border-amber-500/20 bg-gradient-to-b from-slate-900/90 via-slate-900/60 to-slate-950 p-6 shadow-2xl backdrop-blur-md flex flex-col justify-between space-y-4">
             <div>
               <div className="flex items-center justify-between pb-3 border-b border-slate-800">
@@ -201,7 +203,7 @@ export default function LoginPage() {
                   <h3 className="text-sm font-extrabold text-white">Acesso Rápido de Teste</h3>
                 </div>
                 <span className="rounded-md bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 text-[10px] font-bold text-amber-400">
-                  Dev Only (Senha: 123456)
+                  {process.env.NODE_ENV === 'development' ? 'Dev Only' : 'Modo Demo'} (Senha: 123456)
                 </span>
               </div>
 
@@ -252,7 +254,7 @@ export default function LoginPage() {
             <div className="rounded-xl bg-slate-950/60 border border-slate-800/80 p-3 text-[11px] text-slate-400 flex items-center gap-2">
               <Sparkles size={16} className="text-amber-400 shrink-0" />
               <span>
-                Ambiente de desenvolvimento ativo. Clique em qualquer cargo acima para alternar de perfil com a senha <strong className="text-amber-300">123456</strong>.
+                Ambiente de {process.env.NODE_ENV === 'development' ? 'desenvolvimento' : 'demonstração'} ativo. Clique em qualquer cargo acima para alternar de perfil com a senha <strong className="text-amber-300">123456</strong>.
               </span>
             </div>
           </div>
